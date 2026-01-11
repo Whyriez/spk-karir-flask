@@ -14,7 +14,7 @@ export default function JurusanIndex() {
 
     const fetchData = async () => {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:5000/api/jurusan', {
+        const res = await fetch('/api/jurusan', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const json = await res.json();

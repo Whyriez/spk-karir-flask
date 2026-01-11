@@ -30,7 +30,7 @@ export default function BwmInput() {
         const fetchData = async () => {
             const token = localStorage.getItem('token');
             try {
-                const res = await fetch('http://localhost:5000/api/kriteria', {
+                const res = await fetch('/api/kriteria', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const json = await res.json();
@@ -78,7 +78,7 @@ export default function BwmInput() {
         };
 
         try {
-            const res = await fetch('http://localhost:5000/api/bwm/save', {
+            const res = await fetch('/api/bwm/save', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -21,7 +21,7 @@ export default function PeriodeIndex() {
     const fetchData = async () => {
         const token = localStorage.getItem('token');
         try {
-            const res = await fetch('http://localhost:5000/api/periode', {
+            const res = await fetch('/api/periode', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const json = await res.json();

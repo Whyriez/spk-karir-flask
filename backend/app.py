@@ -29,10 +29,17 @@ app.config.from_object(Config)
 # 2. Init Extensions
 CORS(app, resources={
     r"/api/*": {
-        "origins": "http://localhost:5174",
-        "supports_credentials": True
+        "origins": ["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173"],
+        "supports_credentials": True,
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"] # Pastikan OPTIONS diizinkan
     }
 })
+# CORS(app, resources={
+#     r"/api/*": {
+#         "origins": "http://localhost:5173",
+#         "supports_credentials": True
+#     }
+# })
 db.init_app(app)      # Sambungkan Database
 migrate = Migrate(app, db) # Sambungkan Flask-Migrate
 

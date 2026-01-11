@@ -1,3 +1,4 @@
+import pandas as pd
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 from models import db, Alumni
@@ -87,3 +88,31 @@ def destroy(id):
     db.session.delete(alumni)
     db.session.commit()
     return jsonify({'msg': 'Data alumni dihapus'}), 200
+
+
+@alumni_bp.route('/import', methods=['POST'])
+def import_alumni():
+    if 'file' not in request.files:
+        return jsonify({"msg": "No file uploaded"}), 400
+
+    file = request.files['file']
+
+    try:
+        # Baca Excel menggunakan Pandas
+        df = pd.read_excel(file)
+
+        # Loop dan simpan ke DB
+        for index, row in df.iterrows():
+            new_alumni = Alumni(
+                name=row['Nama'],
+                status=row['Status'],  # Pastikan nama kolom di Excel sesuai
+                batch=row['Tahun Lulus'],
+                major=row['Jurusan']
+            )
+            db.session.add(new_alumni)
+
+        db.session.commit()
+        return jsonify({"msg": "Data imported successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"msg": str(e)}), 500

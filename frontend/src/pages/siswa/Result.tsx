@@ -13,7 +13,7 @@ export default function Result() {
         const fetchResult = async () => {
             const token = localStorage.getItem('token');
             try {
-                const res = await fetch('http://localhost:5000/api/moora/result', {
+                const res = await fetch('/api/moora/result', {
                     headers: {'Authorization': `Bearer ${token}`}
                 });
                 const json = await res.json();

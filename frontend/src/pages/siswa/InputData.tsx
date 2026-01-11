@@ -26,7 +26,7 @@ export default function InputDataSiswa() {
         const fetchForm = async () => {
             const token = localStorage.getItem('token');
             try {
-                const res = await fetch('http://localhost:5000/api/siswa/form', {
+                const res = await fetch('/api/siswa/form', {
                     headers: {'Authorization': `Bearer ${token}`}
                 });
                 const json = await res.json();

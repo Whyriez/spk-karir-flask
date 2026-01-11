@@ -30,7 +30,7 @@ export default function MonitoringIndex() {
         if(filterKelas) params.append('kelas', filterKelas);
 
         try {
-            const res = await fetch(`http://localhost:5000/api/monitoring?${params.toString()}`, {
+            const res = await fetch(`/api/monitoring?${params.toString()}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const json = await res.json();

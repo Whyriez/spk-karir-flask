@@ -40,7 +40,7 @@ export default function PromotionIndex() {
         const token = localStorage.getItem('token');
 
         try {
-            const res = await fetch('http://localhost:5000/api/promotion/execute', {
+            const res = await fetch('/api/promotion/execute', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

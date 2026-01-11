@@ -147,6 +147,14 @@ class NilaiSiswa(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
     updated_at = db.Column(db.DateTime(timezone=True), onupdate=func.now())
 
+class NilaiStaticJurusan(db.Model):
+    __tablename__ = 'nilai_static_jurusans'
+    id = db.Column(db.Integer, primary_key=True)
+    jurusan_id = db.Column(db.Integer, db.ForeignKey('jurusan.id', ondelete='CASCADE'), nullable=False)
+    kriteria_id = db.Column(db.Integer, db.ForeignKey('kriteria.id', ondelete='CASCADE'), nullable=False)
+    nilai = db.Column(db.Float, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
+    updated_at = db.Column(db.DateTime(timezone=True), onupdate=func.now())
 
 class HasilRekomendasi(db.Model):
     __tablename__ = 'hasil_rekomendasi'

@@ -17,7 +17,7 @@ from routes.monitoring import monitoring_bp
 from routes.promotion import promotion_bp
 from routes.settings import settings_bp
 
-from command import seed_db
+from command import seed_db, migrate_fresh
 # Import konfigurasi dan database yang sudah kita siapkan
 from config import Config
 from models import db
@@ -48,6 +48,7 @@ migrate = Migrate(app, db) # Sambungkan Flask-Migrate
 jwt = JWTManager(app)
 
 app.cli.add_command(seed_db)
+app.cli.add_command(migrate_fresh)
 
 
 app.register_blueprint(auth_bp, url_prefix='/api/auth')

@@ -74,7 +74,7 @@ class User(db.Model):
 
     # Enum types
     role = db.Column(db.Enum(RoleEnum), default=RoleEnum.siswa, nullable=False)
-    kelas_saat_ini = db.Column(db.Enum(KelasEnum), default=KelasEnum.kelas_10, nullable=False)
+    kelas_saat_ini = db.Column(db.String(20), nullable=True)
 
     # --- MISSING FIELDS ADDED ---
     jenis_pakar = db.Column(db.String(255), nullable=True)  # Untuk role pakar
@@ -163,7 +163,7 @@ class HasilRekomendasi(db.Model):
 
     # --- TAMBAHAN KOLOM UNTUK HISTORY/TRACKING ---
     periode_id = db.Column(db.Integer, db.ForeignKey('periodes.id'), nullable=True)
-    tingkat_kelas = db.Column(db.Enum('10', '11', '12', 'alumni'), nullable=True)
+    tingkat_kelas = db.Column(db.String(20), nullable=True)
     catatan_guru_bk = db.Column(db.Text, nullable=True)
     # ---------------------------------------------
 

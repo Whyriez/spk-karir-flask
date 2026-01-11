@@ -1,34 +1,64 @@
-import React, {useEffect, useState} from 'react';
-import {Link, useNavigate, useOutletContext, useSearchParams} from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import Modal from '@/components/Modal';
 import SecondaryButton from '@/components/SecondaryButton';
 import apiClient from '@/lib/axios';
 import Header from "../../components/Header.tsx";
 
+// --- IMPORT UNTUK GRAFIK (PROGRESS CHART) ---
+import { Line } from 'react-chartjs-2';
+import {
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    Title,
+    Tooltip,
+    Legend,
+    Filler
+} from 'chart.js';
+
+// Registrasi komponen ChartJS untuk mendukung grafik garis dan area fill [cite: 102]
+ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    Title,
+    Tooltip,
+    Legend,
+    Filler
+);
+
 export default function ResultSiswa() {
     const [data, setData] = useState<any>(null);
+    const [chartData, setChartData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isAlumniModalOpen, setIsAlumniModalOpen] = useState(false);
     const [searchParams] = useSearchParams();
     const historyId = searchParams.get('id');
 
-    // 1. Fetch Data dari Backend
+    // 1. Ambil Data Hasil MOORA dan Data Monitoring untuk Grafik
     useEffect(() => {
-        const fetchResult = async () => {
-            setLoading(true); // Set loading true setiap kali ID berubah
+        const fetchData = async () => {
+            setLoading(true);
             try {
-                // Jika ada ID di URL, kirim sebagai query param
-                const url = historyId ? `/moora/result?id=${historyId}` : '/moora/result';
+                // Fetch hasil MOORA periode aktif atau berdasarkan riwayat ID [cite: 101]
+                const resultUrl = historyId ? `/moora/result?id=${historyId}` : '/moora/result';
+                const resResult = await apiClient.get(resultUrl);
+                setData(resResult.data);
 
-                const res = await apiClient.get(url);
-                setData(res.data);
+                // Fetch data longitudinal untuk Progress Chart (Kelas 10, 11, 12)
+                const resChart = await apiClient.get('/monitoring/chart-data');
+                setChartData(resChart.data);
             } catch (err) {
-                console.error("Gagal mengambil hasil:", err);
+                console.error("Gagal mengambil data:", err);
             } finally {
                 setLoading(false);
             }
         };
-        fetchResult();
+        fetchData();
     }, [historyId]);
 
     // 2. Loading State
@@ -36,14 +66,10 @@ export default function ResultSiswa() {
         return (
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                    <div
-                        className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-10 text-center text-gray-500 flex flex-col items-center justify-center min-h-[300px]">
-                        <svg className="animate-spin h-8 w-8 text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg"
-                             fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
-                                    strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor"
-                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-10 text-center text-gray-500 flex flex-col items-center justify-center min-h-[300px]">
+                        <svg className="animate-spin h-8 w-8 text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
                         Memuat analisis data...
                     </div>
@@ -52,310 +78,191 @@ export default function ResultSiswa() {
         );
     }
 
-    // 3. Handle Jika Belum Ada Data (Mirip Laravel)
+    // 3. Handle Jika Belum Ada Data
     if (!data || !data.hasil) {
         return (
             <>
-                <Header>
-                    <h2 className="font-semibold text-xl text-gray-800 leading-tight">Laporan Hasil Analisis Karir</h2>
-                </Header>
+                <Header><h2 className="font-semibold text-xl text-gray-800 leading-tight">Laporan Hasil Analisis Karir</h2></Header>
                 <div className="py-20 text-center px-4">
                     <div className="inline-block p-4 bg-yellow-100 rounded-full mb-4">
                         <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
                         </svg>
                     </div>
                     <h3 className="text-xl font-bold text-gray-800">Data Penilaian Belum Tersedia</h3>
-                    <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                        Anda belum memiliki data hasil analisis untuk periode aktif saat ini. Silakan isi kuesioner
-                        terlebih
-                        dahulu.
-                    </p>
-                    <Link to="/siswa/input"
-                          className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold inline-block">
-                        Mulai Input Data
-                    </Link>
+                    <p className="text-gray-500 mb-6 max-w-md mx-auto">Silakan isi kuesioner terlebih dahulu untuk melihat hasil analisis.</p>
+                    <Link to="/siswa/input" className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold inline-block">Mulai Input Data</Link>
                 </div>
             </>
-
         );
     }
 
-    const {hasil, alumni, periode} = data;
+    const { hasil, alumni, periode } = data;
     const alumni_relevan = alumni || [];
+    const keputusan = hasil.keputusan || '';
 
-    // 4. Tentukan Warna & Deskripsi Dinamis
+    // 4. Tema Visual Dinamis Berdasarkan Keputusan [cite: 95]
     let themeClass = 'border-gray-500 text-gray-700';
     let bgClass = 'bg-gray-50';
     let description = '';
 
-    const keputusan = hasil.keputusan || '';
-
     if (keputusan.includes('Studi')) {
-        themeClass = 'border-indigo-500 text-indigo-700';
-        bgClass = 'bg-indigo-50';
-        description = 'Berdasarkan analisis potensi akademik dan minat studi Anda yang dominan, sistem sangat menyarankan Anda untuk melanjutkan pendidikan ke jenjang Perguruan Tinggi.';
+        themeClass = 'border-indigo-500 text-indigo-700'; bgClass = 'bg-indigo-50';
+        description = 'Sistem merekomendasikan Anda untuk melanjutkan pendidikan tinggi berdasarkan potensi akademik dan minat studi yang Anda miliki.';
     } else if (keputusan.includes('Kerja') || keputusan.includes('Bekerja')) {
-        themeClass = 'border-emerald-500 text-emerald-700';
-        bgClass = 'bg-emerald-50';
-        description = 'Analisis menunjukkan kesiapan kerja praktis dan orientasi karir industri Anda sangat kuat. Memasuki dunia kerja langsung setelah lulus adalah pilihan strategis.';
+        themeClass = 'border-emerald-500 text-emerald-700'; bgClass = 'bg-emerald-50';
+        description = 'Analisis menunjukkan kesiapan kerja praktis Anda sangat kuat. Memasuki dunia industri adalah pilihan strategis bagi Anda.';
     } else if (keputusan.includes('Berwirausaha')) {
-        themeClass = 'border-orange-500 text-orange-700';
-        bgClass = 'bg-orange-50';
-        description = 'Profil Anda menunjukkan jiwa entrepreneurship yang tinggi didukung dengan modal/aset yang memadai. Merintis usaha mandiri adalah potensi terbaik Anda.';
+        themeClass = 'border-orange-500 text-orange-700'; bgClass = 'bg-orange-50';
+        description = 'Anda memiliki jiwa entrepreneurship yang tinggi didukung dengan kesiapan modal yang memadai untuk merintis usaha sendiri.';
     }
 
+    // --- KONFIGURASI GRAFIK ---
+    const chartOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'bottom' as const },
+            tooltip: { mode: 'index' as const, intersect: false },
+        },
+        scales: {
+            y: { min: 0, max: 1, title: { display: true, text: 'Nilai Optimasi MOORA' } }
+        },
+    };
+
+    const formattedChartData = chartData ? {
+        labels: chartData.labels,
+        datasets: chartData.datasets.map((ds: any) => ({
+            label: ds.label,
+            data: ds.data,
+            borderColor: ds.color,
+            backgroundColor: ds.color + '20',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 5,
+        }))
+    } : null;
 
     return (
         <div>
-            <Header>
-                <h2 className="font-semibold text-xl text-gray-800 leading-tight">Laporan Hasil Analisis Karir</h2>
-            </Header>
+            <Header><h2 className="font-semibold text-xl text-gray-800 leading-tight">Laporan Hasil Analisis Karir</h2></Header>
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-8">
 
-                    {/* HEADER INFO PERIODE */}
-                    <div
-                        className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-blue-500 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    {/* PERIODE INFO */}
+                    <div className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-blue-500 flex justify-between items-center">
                         <div>
-                            <span
-                                className="text-xs font-bold text-blue-500 uppercase tracking-wide">Periode Penilaian</span>
-                            <h3 className="text-lg font-bold text-gray-800">
-                                {periode}
-                            </h3>
-                            {/* Jika backend kirim tanggal_hitung, tampilkan */}
-                            {hasil.created_at && (
-                                <p className="text-sm text-gray-500">
-                                    Dihitung pada: {new Date(hasil.created_at).toLocaleDateString('id-ID', {
-                                    weekday: 'long',
-                                    year: 'numeric',
-                                    month: 'long',
-                                    day: 'numeric'
-                                })}
-                                </p>
-                            )}
+                            <span className="text-xs font-bold text-blue-500 uppercase">Periode Penilaian</span>
+                            <h3 className="text-lg font-bold text-gray-800">{periode}</h3>
+                            <p className="text-sm text-gray-500 italic">Tingkat Kelas: {hasil.tingkat_kelas || '-'}</p>
                         </div>
-                        <Link to="/dashboard" className="text-sm text-gray-500 hover:text-gray-800 underline">
-                            Lihat Riwayat Lain
-                        </Link>
+                        <Link to="/dashboard" className="text-sm text-gray-500 hover:text-gray-800 underline font-medium">Lihat Riwayat</Link>
                     </div>
 
-                    {/* GRID UTAMA */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-                        {/* KOLOM KIRI (2/3): DETAIL HASIL */}
                         <div className="lg:col-span-2 space-y-6">
 
-                            {/* KARTU KEPUTUSAN UTAMA */}
-                            <div
-                                className={`bg-white overflow-hidden shadow-lg rounded-xl border-t-8 ${themeClass.split(' ')[0]}`}>
-                                <div className="p-8 text-center">
-                                    <h3 className="text-gray-500 font-bold uppercase tracking-wider text-sm mb-3">
-                                        Rekomendasi Terbaik Sistem
-                                    </h3>
-                                    <div
-                                        className={`text-3xl md:text-5xl font-extrabold mb-4 py-4 px-6 rounded-xl inline-block ${bgClass} ${themeClass}`}>
-                                        {keputusan.toUpperCase()}
-                                    </div>
-                                    <p className="text-gray-600 text-lg leading-relaxed max-w-2xl mx-auto">
-                                        {description}
-                                    </p>
+                            {/* KARTU REKOMENDASI UTAMA */}
+                            <div className={`bg-white shadow-lg rounded-xl border-t-8 ${themeClass.split(' ')[0]} p-8 text-center`}>
+                                <h3 className="text-gray-500 font-bold uppercase tracking-wider text-sm mb-3">Rekomendasi Utama</h3>
+                                <div className={`text-3xl md:text-5xl font-extrabold mb-4 py-4 px-6 rounded-xl inline-block ${bgClass} ${themeClass}`}>
+                                    {keputusan.toUpperCase()}
                                 </div>
+                                <p className="text-gray-600 text-lg leading-relaxed max-w-2xl mx-auto">{description}</p>
                             </div>
 
-                            {/* --- REKOMENDASI ALUMNI --- */}
-                            {alumni_relevan.length > 0 && (
-                                <div
-                                    className="bg-white overflow-hidden shadow-sm sm:rounded-xl p-6 border border-gray-100">
-                                    <div className="flex flex-col sm:flex-row justify-between items-center mb-4">
-                                        <div>
-                                            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                                                <svg className="w-5 h-5 text-indigo-500" fill="none"
-                                                     stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                                          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                                                </svg>
-                                                Jejak Alumni
-                                            </h3>
-                                            <p className="text-sm text-gray-500">
-                                                Kakak kelas jurusanmu yang sukses di jalur <b>{keputusan}</b>
-                                            </p>
-                                        </div>
-
-                                        {alumni_relevan.length > 3 && (
-                                            <button
-                                                onClick={() => setIsAlumniModalOpen(true)}
-                                                className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline mt-2 sm:mt-0"
-                                            >
-                                                Lihat Semua ({alumni_relevan.length})
-                                            </button>
-                                        )}
-                                    </div>
-
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                                        {/* Tampilkan hanya 3 alumni pertama */}
-                                        {alumni_relevan.slice(0, 3).map((a: any, idx: number) => (
-                                            <div key={idx} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                                <div className="font-bold text-gray-800 truncate">{a.name}</div>
-                                                <div className="text-xs text-gray-500 mb-1">Angkatan {a.batch}</div>
-                                                <div className="text-sm text-indigo-700 font-medium line-clamp-2">
-                                                    {a.status}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* CATATAN GURU BK */}
-                            <div className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200">
-                                <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex items-center gap-2">
-                                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor"
-                                         viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                              d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path>
+                            {/* --- PROGRESS CHART: MONITORING LONGITUDINAL  --- */}
+                            <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-100">
+                                <div className="flex items-center gap-2 mb-6 pb-2 border-b">
+                                    <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
                                     </svg>
-                                    <h3 className="font-bold text-gray-800">Catatan & Validasi Guru BK</h3>
+                                    <h3 className="font-bold text-gray-800">Tren Perkembangan Minat (Kelas 10 - 12)</h3>
                                 </div>
-                                <div className="p-6">
-                                    {hasil.catatan ? (
-                                        <div className="prose text-gray-700">
-                                            <p className="italic border-l-4 border-gray-300 pl-4 py-2 bg-gray-50 rounded-r">
-                                                "{hasil.catatan}"
-                                            </p>
-                                            <p className="text-xs text-gray-400 mt-2 text-right">
-                                                — Diverifikasi oleh Tim Bimbingan Konseling
-                                            </p>
-                                        </div>
+                                <div className="h-72">
+                                    {formattedChartData ? (
+                                        <Line options={chartOptions} data={formattedChartData} />
                                     ) : (
-                                        <div className="text-center text-gray-400 py-4 italic">
-                                            Belum ada catatan dari Guru BK untuk hasil ini.
-                                        </div>
+                                        <div className="flex items-center justify-center h-full text-gray-400 italic">Data histori belum cukup untuk menampilkan tren.</div>
                                     )}
                                 </div>
                             </div>
+
+                            {/* JEJAK ALUMNI RELEVAN  */}
+                            {alumni_relevan.length > 0 && (
+                                <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-100">
+                                    <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                        </svg>
+                                        Referensi Jejak Alumni
+                                    </h3>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        {alumni_relevan.slice(0, 3).map((a: any, i: number) => (
+                                            <div key={i} className="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                                <div className="font-bold text-gray-800 text-sm truncate">{a.name}</div>
+                                                <div className="text-xs text-indigo-600 font-semibold">{a.status}</div>
+                                                <div className="text-[10px] text-gray-400">Angkatan {a.batch}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {alumni_relevan.length > 3 && (
+                                        <button onClick={() => setIsAlumniModalOpen(true)} className="mt-4 text-sm text-indigo-600 font-medium hover:underline">Lihat Semua Alumni...</button>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
-                        {/* KOLOM KANAN (1/3): STATISTIK SKOR */}
+                        {/* DETAIL SKOR MOORA (KANAN)  */}
                         <div className="space-y-6">
                             <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-100">
                                 <h3 className="font-bold text-gray-800 mb-6 pb-2 border-b">Detail Skor MOORA</h3>
                                 <div className="space-y-6">
-                                    {/* Item Studi */}
-                                    <div>
-                                        <div className="flex justify-between text-sm mb-1">
-                                            <span className="font-medium text-gray-600">Minat Studi</span>
-                                            <span
-                                                className="font-bold text-indigo-600">{hasil.skor.studi?.toFixed(4)}</span>
+                                    {[
+                                        { label: 'Studi Lanjut', key: 'studi', color: 'bg-indigo-600', text: 'text-indigo-600' },
+                                        { label: 'Dunia Kerja', key: 'kerja', color: 'bg-emerald-500', text: 'text-emerald-600' },
+                                        { label: 'Wirausaha', key: 'wirausaha', color: 'bg-orange-500', text: 'text-orange-600' }
+                                    ].map(item => (
+                                        <div key={item.key}>
+                                            <div className="flex justify-between text-xs mb-1">
+                                                <span className="font-medium text-gray-600">{item.label}</span>
+                                                <span className={`font-bold ${item.text}`}>{hasil.skor[item.key]?.toFixed(4)}</span>
+                                            </div>
+                                            <div className="w-full bg-gray-100 rounded-full h-1.5">
+                                                <div className={`${item.color} h-1.5 rounded-full`} style={{ width: `${Math.min(hasil.skor[item.key] * 100, 100)}%` }}></div>
+                                            </div>
                                         </div>
-                                        <div className="w-full bg-gray-100 rounded-full h-2">
-                                            <div className="bg-indigo-600 h-2 rounded-full transition-all duration-1000"
-                                                 style={{width: `${Math.min(hasil.skor.studi * 100, 100)}%`}}></div>
-                                        </div>
-                                    </div>
-
-                                    {/* Item Kerja */}
-                                    <div>
-                                        <div className="flex justify-between text-sm mb-1">
-                                            <span className="font-medium text-gray-600">Minat Kerja</span>
-                                            <span
-                                                className="font-bold text-emerald-600">{hasil.skor.kerja?.toFixed(4)}</span>
-                                        </div>
-                                        <div className="w-full bg-gray-100 rounded-full h-2">
-                                            <div
-                                                className="bg-emerald-500 h-2 rounded-full transition-all duration-1000"
-                                                style={{width: `${Math.min(hasil.skor.kerja * 100, 100)}%`}}></div>
-                                        </div>
-                                    </div>
-
-                                    {/* Item Wirausaha */}
-                                    <div>
-                                        <div className="flex justify-between text-sm mb-1">
-                                            <span className="font-medium text-gray-600">Minat Wirausaha</span>
-                                            <span
-                                                className="font-bold text-orange-600">{hasil.skor.wirausaha?.toFixed(4)}</span>
-                                        </div>
-                                        <div className="w-full bg-gray-100 rounded-full h-2">
-                                            <div className="bg-orange-500 h-2 rounded-full transition-all duration-1000"
-                                                 style={{width: `${Math.min(hasil.skor.wirausaha * 100, 100)}%`}}></div>
-                                        </div>
-                                    </div>
+                                    ))}
                                 </div>
-
-                                <div className="mt-6 pt-4 border-t border-gray-100">
-                                    <button onClick={() => window.print()}
-                                            className="w-full py-2 flex items-center justify-center gap-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition text-sm font-medium">
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
-                                        </svg>
-                                        Cetak Laporan (PDF)
-                                    </button>
-                                </div>
+                                <button onClick={() => window.print()} className="w-full mt-8 py-2.5 bg-gray-800 text-white rounded-lg font-bold text-sm hover:bg-gray-700 transition">Cetak Laporan PDF</button>
                             </div>
 
-                            {/* Info Bantuan */}
                             <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                <h4 className="font-bold text-blue-800 text-sm mb-2">Butuh Konsultasi Lebih Lanjut?</h4>
-                                <p className="text-xs text-blue-700 mb-3">
-                                    Jika Anda masih ragu dengan hasil rekomendasi ini, silakan temui Guru BK di ruang
-                                    konseling untuk diskusi mendalam.
-                                </p>
+                                <h4 className="font-bold text-blue-800 text-sm mb-1 italic">Butuh Konsultasi?</h4>
+                                <p className="text-[11px] text-blue-700 leading-relaxed">Hasil ini bersifat pendukung keputusan. Silakan diskusikan lebih lanjut dengan Guru BK Anda.</p>
                             </div>
                         </div>
                     </div>
-
                 </div>
             </div>
 
-            {/* --- MODAL DETAIL ALUMNI --- */}
+            {/* MODAL ALUMNI */}
             <Modal show={isAlumniModalOpen} onClose={() => setIsAlumniModalOpen(false)}>
                 <div className="p-6">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-lg font-bold text-gray-900">
-                            Daftar Alumni - {keputusan}
-                        </h2>
-                        <button onClick={() => setIsAlumniModalOpen(false)}
-                                className="text-gray-400 hover:text-gray-600">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                      d="M6 18L18 6M6 6l12 12"></path>
-                            </svg>
-                        </button>
+                    <h2 className="text-xl font-bold mb-4">Daftar Alumni Relevan</h2>
+                    <div className="max-h-96 overflow-y-auto space-y-3">
+                        {alumni_relevan.map((a: any, i: number) => (
+                            <div key={i} className="flex justify-between p-3 bg-gray-50 rounded border">
+                                <div>
+                                    <div className="font-bold">{a.name}</div>
+                                    <div className="text-xs text-gray-500">Angkatan {a.batch}</div>
+                                </div>
+                                <div className="text-sm font-semibold text-indigo-600">{a.status}</div>
+                            </div>
+                        ))}
                     </div>
-
-                    <p className="text-sm text-gray-500 mb-4">
-                        Berikut adalah data alumni jurusan Anda yang memilih jalur karir ini:
-                    </p>
-
-                    <div className="overflow-y-auto max-h-[60vh]">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50 sticky top-0">
-                            <tr>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Angkatan</th>
-                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Detail
-                                    Status
-                                </th>
-                            </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                            {alumni_relevan.map((a: any, idx: number) => (
-                                <tr key={idx}>
-                                    <td className="px-4 py-3 text-sm font-medium text-gray-900">{a.name}</td>
-                                    <td className="px-4 py-3 text-sm text-gray-500">{a.batch}</td>
-                                    <td className="px-4 py-3 text-sm text-indigo-600">{a.status}</td>
-                                </tr>
-                            ))}
-                            </tbody>
-                        </table>
-                    </div>
-
                     <div className="mt-6 flex justify-end">
-                        <SecondaryButton onClick={() => setIsAlumniModalOpen(false)}>
-                            Tutup
-                        </SecondaryButton>
+                        <SecondaryButton onClick={() => setIsAlumniModalOpen(false)}>Tutup</SecondaryButton>
                     </div>
                 </div>
             </Modal>

@@ -6,6 +6,8 @@ from models import db, User, HasilRekomendasi, Periode, Jurusan, RoleEnum
 monitoring_bp = Blueprint('monitoring', __name__)
 
 
+
+
 def paginate_response(pagination, endpoint, **kwargs):
     """
     Helper untuk membuat format pagination mirip Laravel
@@ -46,6 +48,37 @@ def paginate_response(pagination, endpoint, **kwargs):
         'links': links
     }
 
+@monitoring_bp.route('/chart-data', methods=['GET'])
+@jwt_required()
+def get_chart_data():
+    claims = get_jwt()
+    current_user_id = claims.get('id')
+
+    # Ambil semua riwayat hasil urut berdasarkan periode
+    history = HasilRekomendasi.query.filter_by(siswa_id=current_user_id) \
+        .join(Periode) \
+        .order_by(asc(Periode.id)).all()
+
+    labels = []
+    studi_scores = []
+    kerja_scores = []
+    wirausaha_scores = []
+
+    for h in history:
+        # Gunakan nama periode atau tingkat kelas sebagai label X-axis
+        labels.append(h.periode.nama_periode if h.periode else f"Kelas {h.tingkat_kelas}")
+        studi_scores.append(round(h.skor_studi, 4))
+        kerja_scores.append(round(h.skor_kerja, 4))
+        wirausaha_scores.append(round(h.skor_wirausaha, 4))
+
+    return jsonify({
+        'labels': labels,
+        'datasets': [
+            {'label': 'Melanjutkan Studi', 'data': studi_scores, 'color': '#3b82f6'},
+            {'label': 'Bekerja', 'data': kerja_scores, 'color': '#10b981'},
+            {'label': 'Berwirausaha', 'data': wirausaha_scores, 'color': '#f59e0b'}
+        ]
+    })
 
 @monitoring_bp.route('/', methods=['GET'], strict_slashes=False)
 @jwt_required()

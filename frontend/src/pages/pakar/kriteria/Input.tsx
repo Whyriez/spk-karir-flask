@@ -1,176 +1,190 @@
-// frontend/src/pages/pakar/kriteria/Input.tsx
-import React, {useEffect, useState} from 'react';
-import {useNavigate, useOutletContext, useParams} from 'react-router-dom';
-import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
-import PrimaryButton from '../../../components/PrimaryButton';
-import SecondaryButton from '../../../components/SecondaryButton';
-import TextInput from '../../../components/TextInput';
-import InputLabel from '../../../components/InputLabel';
-import type {LayoutContextType} from "../../../interface/layout.ts";
+import React, { useEffect, useState, FormEvent } from 'react';
+import Header from '@/components/Header'; // Pakai Header Komponen (Anti Glitch)
+import Modal from '@/components/Modal';
+import PrimaryButton from '@/components/PrimaryButton';
+import SecondaryButton from '@/components/SecondaryButton';
+import InputLabel from '@/components/InputLabel';
+import apiClient from '@/lib/axios';
 
-export default function InputKriteriaPakar() {
-    const navigate = useNavigate();
-    const {id} = useParams(); // Ambil ID dari URL (jika mode edit)
+// Tipe Data
+interface Kriteria {
+    id: number;
+    kode: string;
+    nama: string;
+    pertanyaan: string;
+    tipe_input: string;
+}
 
-    const [form, setForm] = useState({
-        kode: '',
-        nama: '',
-        pertanyaan: '',
-        tipe_input: 'likert', // likert / number / select
-        atribut: 'benefit', // benefit / cost
-        kategori: 'kuesioner',
-        sumber_nilai: 'input_siswa'
-    });
+export default function ManajemenPertanyaanPakar() {
+    const [data, setData] = useState<Kriteria[]>([]);
+    const [loading, setLoading] = useState(true);
 
+    // State Modal
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingKriteria, setEditingKriteria] = useState<Kriteria | null>(null);
+    const [pertanyaan, setPertanyaan] = useState('');
+    const [processing, setProcessing] = useState(false);
 
-    const [loading, setLoading] = useState(false);
-
-    // Fetch Data jika sedang Edit (ada ID)
-    useEffect(() => {
-        if (id) {
-            fetchData(id);
-        }
-    }, [id]);
-
-    const fetchData = async (kriteriaId: string) => {
-        const token = localStorage.getItem('token');
-        try {
-            const res = await fetch(`/api/kriteria/${kriteriaId}`, {
-                headers: {'Authorization': `Bearer ${token}`}
-            });
-            const json = await res.json();
-            if (res.ok) {
-                setForm(json.data);
-            } else {
-                alert("Gagal mengambil data kriteria");
-            }
-        } catch (error) {
-            console.error(error);
-        }
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    // 1. Fetch Data Kriteria
+    const fetchData = async () => {
         setLoading(true);
-        const token = localStorage.getItem('token');
-
-        // URL & Method tergantung Edit atau Create (Pakar biasanya hanya Edit)
-        const url = id
-            ? `http://localhost:5000/api/kriteria/${id}`
-            : `http://localhost:5000/api/kriteria`;
-
-        const method = id ? 'PUT' : 'POST';
-
         try {
-            const res = await fetch(url, {
-                method: method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(form)
-            });
-
-            if (res.ok) {
-                navigate('/pakar/kriteria'); // Redirect kembali ke index
-            } else {
-                const json = await res.json();
-                alert(json.msg || 'Terjadi kesalahan saat menyimpan.');
-            }
+            const response = await apiClient.get('/kriteria');
+            setData(response.data.data);
         } catch (error) {
-            console.error(error);
-            alert('Gagal menghubungi server.');
+            console.error("Error fetching kriteria:", error);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
-    const {setHeader} = useOutletContext<LayoutContextType>();
     useEffect(() => {
-        setHeader(
-            <h2 className="font-semibold text-xl text-gray-800">{id ? 'Edit' : 'Tambah'} Kriteria (Pakar)</h2>
-        );
+        fetchData();
     }, []);
 
+    // 2. Handlers Modal
+    const openEditModal = (item: Kriteria) => {
+        setEditingKriteria(item);
+        setPertanyaan(item.pertanyaan || '');
+        setIsModalOpen(true);
+    };
+
+    const closeModal = () => {
+        setIsModalOpen(false);
+        setEditingKriteria(null);
+        setPertanyaan('');
+    };
+
+    // 3. Submit Update
+    const handleSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        if (!editingKriteria) return;
+
+        setProcessing(true);
+        try {
+            await apiClient.put(`/kriteria/${editingKriteria.id}`, {
+                pertanyaan: pertanyaan // Kirim update pertanyaan saja
+            });
+
+            // Update data di tabel lokal tanpa fetch ulang (Optimistic UI)
+            setData(prev => prev.map(item =>
+                item.id === editingKriteria.id ? { ...item, pertanyaan: pertanyaan } : item
+            ));
+
+            closeModal();
+            alert('Pertanyaan berhasil diperbarui');
+        } catch (error) {
+            console.error(error);
+            alert('Gagal menyimpan pertanyaan.');
+        } finally {
+            setProcessing(false);
+        }
+    };
+
     return (
-        <div className="py-12">
-            <div className="max-w-2xl mx-auto sm:px-6 lg:px-8">
-                <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
-                    <form onSubmit={handleSubmit} className="space-y-6">
+        <>
+            <Header>
+                <h2 className="font-semibold text-xl text-gray-800 leading-tight">
+                    Manajemen Pertanyaan Kriteria
+                </h2>
+            </Header>
 
-                        {/* Kode & Nama (Biasanya Readonly bagi Pakar, tapi tergantung kebijakan) */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <InputLabel value="Kode Kriteria"/>
-                                <TextInput
-                                    value={form.kode}
-                                    onChange={(e) => setForm({...form, kode: e.target.value})}
-                                    className="w-full mt-1 bg-gray-100"
-                                    readOnly={true} // Kunci kode agar tidak diubah sembarangan
-                                />
-                            </div>
-                            <div>
-                                <InputLabel value="Nama Kriteria"/>
-                                <TextInput
-                                    value={form.nama}
-                                    onChange={(e) => setForm({...form, nama: e.target.value})}
-                                    className="w-full mt-1 bg-gray-100"
-                                    readOnly={true} // Kunci nama juga
-                                />
-                            </div>
+            <div className="py-12">
+                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
+
+                        <div className="mb-6 bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                            <p className="text-sm text-blue-700">
+                                <strong>Panduan Pakar:</strong> Silakan atur pertanyaan untuk setiap kriteria.
+                                Pertanyaan ini yang akan muncul saat siswa mengisi kuesioner.
+                            </p>
                         </div>
 
-                        {/* Pertanyaan Kuesioner (Ini yang paling penting diisi Pakar) */}
-                        <div>
-                            <InputLabel value="Pertanyaan Kuesioner (Untuk Siswa)"/>
-                            <textarea
-                                className="w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                rows={4}
-                                value={form.pertanyaan || ''}
-                                onChange={(e) => setForm({...form, pertanyaan: e.target.value})}
-                                placeholder="Contoh: Apakah Anda tertarik dengan pelajaran Matematika?"
-                                required
-                            />
-                            <p className="text-sm text-gray-500 mt-1">Pertanyaan ini akan muncul di halaman input
-                                siswa.</p>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kode</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kriteria</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipe Input</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/2">Pertanyaan Saat Ini</th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {loading ? (
+                                        <tr><td colSpan={5} className="p-4 text-center">Memuat data...</td></tr>
+                                    ) : (
+                                        data.map((item) => (
+                                            <tr key={item.id} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
+                                                    {item.kode}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                                    {item.nama}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                                                        {item.tipe_input}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-gray-600">
+                                                    {item.pertanyaan ? (
+                                                        <span className="text-gray-800">{item.pertanyaan}</span>
+                                                    ) : (
+                                                        <span className="text-red-400 italic text-xs">Belum diatur</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                    <button
+                                                        onClick={() => openEditModal(item)}
+                                                        className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 px-3 py-1 rounded-md transition hover:bg-indigo-100"
+                                                    >
+                                                        Edit Soal
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <InputLabel value="Tipe Input"/>
-                                <select
-                                    value={form.tipe_input}
-                                    onChange={(e) => setForm({...form, tipe_input: e.target.value})}
-                                    className="w-full mt-1 border-gray-300 rounded-md shadow-sm"
-                                >
-                                    <option value="likert">Skala 1-5 (Likert)</option>
-                                    <option value="number">Angka (0-100)</option>
-                                    <option value="select">Pilihan Ya/Tidak</option>
-                                </select>
-                            </div>
-                            <div>
-                                <InputLabel value="Atribut"/>
-                                <select
-                                    value={form.atribut}
-                                    onChange={(e) => setForm({...form, atribut: e.target.value})}
-                                    className="w-full mt-1 border-gray-300 rounded-md shadow-sm"
-                                >
-                                    <option value="benefit">Benefit (Makin besar makin baik)</option>
-                                    <option value="cost">Cost (Makin kecil makin baik)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end gap-2 pt-4 border-t">
-                            <SecondaryButton type="button" onClick={() => navigate('/pakar/kriteria')}>
-                                Batal
-                            </SecondaryButton>
-                            <PrimaryButton disabled={loading}>
-                                {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
-                            </PrimaryButton>
-                        </div>
-                    </form>
+                    </div>
                 </div>
             </div>
-        </div>
+
+            {/* MODAL EDIT PERTANYAAN */}
+            <Modal show={isModalOpen} onClose={closeModal}>
+                <form onSubmit={handleSubmit} className="p-6">
+                    <h2 className="text-lg font-bold text-gray-900 mb-4">
+                        Edit Pertanyaan: <span className="text-indigo-600">{editingKriteria?.nama}</span>
+                    </h2>
+
+                    <div className="mb-4">
+                        <InputLabel value="Teks Pertanyaan Kuesioner" />
+                        <textarea
+                            className="w-full mt-2 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-3"
+                            rows={5}
+                            value={pertanyaan}
+                            onChange={(e) => setPertanyaan(e.target.value)}
+                            placeholder="Contoh: Seberapa besar minat Anda dalam bidang matematika?"
+                            required
+                        />
+                        <p className="text-xs text-gray-500 mt-2">
+                            *Pertanyaan ini akan dibaca langsung oleh siswa. Gunakan bahasa yang mudah dipahami.
+                        </p>
+                    </div>
+
+                    <div className="flex justify-end gap-3 mt-6">
+                        <SecondaryButton type="button" onClick={closeModal}>
+                            Batal
+                        </SecondaryButton>
+                        <PrimaryButton disabled={processing}>
+                            {processing ? 'Menyimpan...' : 'Simpan Pertanyaan'}
+                        </PrimaryButton>
+                    </div>
+                </form>
+            </Modal>
+        </>
     );
 }

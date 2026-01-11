@@ -3,21 +3,12 @@ import {Link, useNavigate, useOutletContext, useSearchParams} from 'react-router
 import Modal from '@/components/Modal';
 import SecondaryButton from '@/components/SecondaryButton';
 import apiClient from '@/lib/axios';
-import type {LayoutContextType} from "../../interface/layout.ts";
+import Header from "../../components/Header.tsx";
 
 export default function ResultSiswa() {
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isAlumniModalOpen, setIsAlumniModalOpen] = useState(false);
-    const navigate = useNavigate();
-
-      const {setHeader} = useOutletContext<LayoutContextType>();
-    useEffect(() => {
-        setHeader(
-            <h2 className="font-semibold text-xl text-gray-800 leading-tight">Laporan Hasil Analisis Karir</h2>
-        );
-    }, []);
-
     const [searchParams] = useSearchParams();
     const historyId = searchParams.get('id');
 
@@ -43,30 +34,51 @@ export default function ResultSiswa() {
     // 2. Loading State
     if (loading) {
         return (
-            <div className="py-20 text-center text-gray-500">Memuat analisis data...</div>
+            <div className="py-12">
+                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                    <div
+                        className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-10 text-center text-gray-500 flex flex-col items-center justify-center min-h-[300px]">
+                        <svg className="animate-spin h-8 w-8 text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg"
+                             fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                    strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor"
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Memuat analisis data...
+                    </div>
+                </div>
+            </div>
         );
     }
 
     // 3. Handle Jika Belum Ada Data (Mirip Laravel)
     if (!data || !data.hasil) {
         return (
-            <div className="py-20 text-center px-4">
-                <div className="inline-block p-4 bg-yellow-100 rounded-full mb-4">
-                    <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                    </svg>
+            <>
+                <Header>
+                    <h2 className="font-semibold text-xl text-gray-800 leading-tight">Laporan Hasil Analisis Karir</h2>
+                </Header>
+                <div className="py-20 text-center px-4">
+                    <div className="inline-block p-4 bg-yellow-100 rounded-full mb-4">
+                        <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-800">Data Penilaian Belum Tersedia</h3>
+                    <p className="text-gray-500 mb-6 max-w-md mx-auto">
+                        Anda belum memiliki data hasil analisis untuk periode aktif saat ini. Silakan isi kuesioner
+                        terlebih
+                        dahulu.
+                    </p>
+                    <Link to="/siswa/input"
+                          className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold inline-block">
+                        Mulai Input Data
+                    </Link>
                 </div>
-                <h3 className="text-xl font-bold text-gray-800">Data Penilaian Belum Tersedia</h3>
-                <p className="text-gray-500 mb-6 max-w-md mx-auto">
-                    Anda belum memiliki data hasil analisis untuk periode aktif saat ini. Silakan isi kuesioner terlebih
-                    dahulu.
-                </p>
-                <Link to="/siswa/input"
-                      className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold inline-block">
-                    Mulai Input Data
-                </Link>
-            </div>
+            </>
+
         );
     }
 
@@ -95,9 +107,11 @@ export default function ResultSiswa() {
     }
 
 
-
     return (
         <div>
+            <Header>
+                <h2 className="font-semibold text-xl text-gray-800 leading-tight">Laporan Hasil Analisis Karir</h2>
+            </Header>
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-8">
 

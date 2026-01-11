@@ -8,6 +8,7 @@ import InputLabel from '../../../components/InputLabel';
 import apiClient from "../../../lib/axios.ts";
 import {useOutletContext} from "react-router-dom";
 import type {LayoutContextType} from "../../../interface/layout.ts";
+import Header from "../../../components/Header.tsx";
 
 export default function PeriodeIndex() {
     const [periodes, setPeriodes] = useState<any[]>([]);
@@ -119,14 +120,11 @@ export default function PeriodeIndex() {
         }
     }
 
-    const {setHeader} = useOutletContext<LayoutContextType>();
-    useEffect(() => {
-        setHeader(
-            <h2 className="font-semibold text-xl text-gray-800">Manajemen Periode</h2>
-        );
-    }, []);
     return (
         <div>
+             <Header>
+               <h2 className="font-semibold text-xl text-gray-800">Manajemen Periode</h2>
+            </Header>
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
 

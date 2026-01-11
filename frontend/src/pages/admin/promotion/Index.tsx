@@ -3,18 +3,12 @@ import PrimaryButton from '../../../components/PrimaryButton';
 import apiClient from "../../../lib/axios.ts";
 import {useOutletContext} from "react-router-dom";
 import type {LayoutContextType} from "../../../interface/layout.ts";
+import Header from "../../../components/Header.tsx";
 
 export default function PromotionIndex() {
     const [stats, setStats] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
-
-     const {setHeader} = useOutletContext<LayoutContextType>();
-    useEffect(() => {
-        setHeader(
-            <h2 className="font-semibold text-xl text-gray-800">Kenaikan Kelas</h2>
-        );
-    }, []);
 
     const fetchStats = async () => {
         setLoading(true)
@@ -72,9 +66,12 @@ export default function PromotionIndex() {
     if (loading) return <div className="p-10 text-center">Loading Summary...</div>;
 
 
-
     return (
-        <div className="py-12">
+        <>
+            <Header>
+                <h2 className="font-semibold text-xl text-gray-800">Kenaikan Kelas</h2>
+            </Header>
+            <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
                     <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
@@ -149,5 +146,6 @@ export default function PromotionIndex() {
 
                 </div>
             </div>
+        </>
     );
 }

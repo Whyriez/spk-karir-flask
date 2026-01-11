@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, {useEffect, useState, useMemo} from 'react';
 import AuthenticatedLayout from "../../../Layouts/AuthenticatedLayout";
 import {useOutletContext} from "react-router-dom";
 import type {LayoutContextType} from "../../../interface/layout.ts";
+import Header from "../../../components/Header.tsx";
 
 interface User {
     id: number;
@@ -32,20 +33,13 @@ export default function BwmInput() {
 
     const user: User = JSON.parse(localStorage.getItem('user') || '{}');
 
-    const {setHeader} = useOutletContext<LayoutContextType>();
-    useEffect(() => {
-        setHeader(
-            <h2 className="font-semibold text-xl text-gray-800">Input BWM (Sesuai FGD)</h2>
-        );
-    }, []);
-
     // Fetch Initial Data
     useEffect(() => {
         const fetchContext = async () => {
             const token = localStorage.getItem('token');
             try {
                 const res = await fetch('/api/bwm/input-context', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: {'Authorization': `Bearer ${token}`}
                 });
                 const json = await res.json();
 
@@ -112,9 +106,9 @@ export default function BwmInput() {
     const handleComparisonChange = (type: "best" | "others", targetId: number, value: string) => {
         const valInt = parseInt(value);
         if (type === "best") {
-            setBestToOthers(prev => ({ ...prev, [targetId]: valInt }));
+            setBestToOthers(prev => ({...prev, [targetId]: valInt}));
         } else {
-            setOthersToWorst(prev => ({ ...prev, [targetId]: valInt }));
+            setOthersToWorst(prev => ({...prev, [targetId]: valInt}));
         }
     };
 
@@ -123,14 +117,19 @@ export default function BwmInput() {
     if (!isReady) return <div className="p-10 text-center text-gray-500">Loading Context...</div>;
 
     return (
-         <div className="py-12">
+        <>
+            <Header>
+                <h2 className="font-semibold text-xl text-gray-800">Input BWM (Sesuai FGD)</h2>
+            </Header>
+            <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
 
                     {/* INFO ROLE */}
                     <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
                         <p className="text-sm text-blue-700">
                             Login sebagai: <strong>{userRole === 'gurubk' ? 'Guru BK' : 'Kaprodi'}</strong>. <br/>
-                            Di bawah ini adalah kriteria yang menjadi tanggung jawab Anda untuk dibandingkan terhadap referensi FGD.
+                            Di bawah ini adalah kriteria yang menjadi tanggung jawab Anda untuk dibandingkan terhadap
+                            referensi FGD.
                         </p>
                     </div>
 
@@ -169,7 +168,8 @@ export default function BwmInput() {
                                     if (k.id === globalBest?.id) return null;
 
                                     return (
-                                        <div key={k.id} className="flex items-center justify-between bg-gray-50 p-3 rounded">
+                                        <div key={k.id}
+                                             className="flex items-center justify-between bg-gray-50 p-3 rounded">
                                             <span className="text-gray-700 font-medium w-1/2">
                                                 Best ➔ {k.nama} ({k.kode})
                                             </span>
@@ -200,7 +200,8 @@ export default function BwmInput() {
                                     if (k.id === globalWorst?.id) return null;
 
                                     return (
-                                        <div key={k.id} className="flex items-center justify-between bg-gray-50 p-3 rounded">
+                                        <div key={k.id}
+                                             className="flex items-center justify-between bg-gray-50 p-3 rounded">
                                             <span className="text-gray-700 font-medium w-1/2">
                                                 {k.nama} ({k.kode}) ➔ Worst
                                             </span>
@@ -235,5 +236,7 @@ export default function BwmInput() {
                     </form>
                 </div>
             </div>
+        </>
+
     );
 }

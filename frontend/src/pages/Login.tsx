@@ -3,12 +3,13 @@ import Checkbox from '../components/Checkbox';
 import InputLabel from '../components/InputLabel';
 import PrimaryButton from '../components/PrimaryButton';
 import TextInput from '../components/TextInput';
-import { useNavigate } from 'react-router-dom'; // Pengganti Inertia router
+import { useNavigate } from 'react-router-dom';
+import { useLayout } from '@/contexts/LayoutContext';
 
 export default function Login() {
     const navigate = useNavigate();
+    const { refreshUser } = useLayout(); // Get refresh method from context
 
-    // State form pengganti useForm Inertia
     const [data, setData] = useState({
         login_id: '',
         password: '',
@@ -34,12 +35,18 @@ export default function Login() {
             const result = await response.json();
 
             if (response.ok) {
-                // Login Sukses
+                // Login Sukses - Simpan data
                 localStorage.setItem('token', result.token);
                 localStorage.setItem('user', JSON.stringify(result.user));
+                localStorage.setItem('role', result.user.role); // Simpan role juga
 
-                // Redirect ke Dashboard (sesuaikan role nanti)
-                navigate('/dashboard');
+                // Refresh context agar user ter-update
+                refreshUser();
+
+                // Small delay untuk ensure context updated
+                setTimeout(() => {
+                    navigate('/dashboard', { replace: true });
+                }, 100);
             } else {
                 // Login Gagal
                 setErrorMsg(result.msg || 'Terjadi kesalahan saat login.');
@@ -54,7 +61,7 @@ export default function Login() {
 
     return (
         <div className="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gradient-to-br from-blue-500 to-indigo-700">
-            {/* Logo atau Judul (Head Inertia dihapus) */}
+            {/* Logo atau Judul */}
             <div className="text-white text-2xl font-bold mb-4">
                 SPK KARIR
             </div>

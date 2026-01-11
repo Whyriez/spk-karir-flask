@@ -1,5 +1,6 @@
-import React, {JSX, useEffect} from 'react';
+import React, {JSX} from 'react';
 import {BrowserRouter as Router, Routes, Route, Navigate, useLocation} from 'react-router-dom';
+import {LayoutProvider} from '@/contexts/LayoutContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 
@@ -20,27 +21,19 @@ import KriteriaPakar from './pages/pakar/kriteria/Input';
 import InputDataSiswa from "./pages/siswa/InputData";
 import ResultSiswa from "./pages/siswa/Result";
 import BwmSetting from "./pages/admin/bwm/Setting.tsx";
-import NProgress from "nprogress";
 import Welcome from "./pages/Welcome.tsx";
 import AuthenticatedLayout from "./Layouts/AuthenticatedLayout.tsx";
 
-// --- COMPONENT PROTECTED ROUTE DENGAN ROLE ---
+// Protected Route Component
 const ProtectedRoute = ({children, roles}: { children: JSX.Element, roles?: string[] }) => {
     const token = localStorage.getItem('token');
-    const userRole = localStorage.getItem('role'); // Pastikan simpan role saat login
+    const userRole = localStorage.getItem('role');
     const location = useLocation();
-
-    useEffect(() => {
-        // Start dan Done dipanggil cepat untuk memberi efek "loading sekejap" saat pindah halaman
-        NProgress.start();
-        NProgress.done();
-    }, [location]);
 
     if (!token) {
         return <Navigate to="/login" state={{ from: location }} replace/>;
     }
 
-    // Jika butuh role spesifik dan user tidak punya role itu
     if (roles && userRole && !roles.includes(userRole)) {
         return <Navigate to="/dashboard" replace/>;
     }
@@ -51,42 +44,44 @@ const ProtectedRoute = ({children, roles}: { children: JSX.Element, roles?: stri
 function App() {
     return (
         <Router>
-            <Routes>
-                <Route path="/" element={<Welcome />} />
-                <Route path="/login" element={<Login />} />
+            {/* SINGLE LayoutProvider untuk SEMUA routes */}
+            <LayoutProvider>
+                <Routes>
+                    {/* Public routes */}
+                    <Route path="/" element={<Welcome />} />
+                    <Route path="/login" element={<Login />} />
 
-                {/* --- LAYOUT UTAMA (PERSISTENT NAVBAR) --- */}
-                {/* Layout ini akan membungkus semua halaman di bawahnya */}
-                <Route element={<AuthenticatedLayout />}>
+                    {/* Authenticated routes with Layout */}
+                    <Route element={<AuthenticatedLayout />}>
+                        {/* Dashboard */}
+                        <Route path="/dashboard" element={
+                            <ProtectedRoute><Dashboard /></ProtectedRoute>
+                        } />
 
-                    {/* Dashboard */}
-                    <Route path="/dashboard" element={
-                        <ProtectedRoute><Dashboard /></ProtectedRoute>
-                    } />
+                        {/* ADMIN ROUTES */}
+                        <Route path="/admin/kriteria" element={<ProtectedRoute roles={['admin']}><KriteriaIndex /></ProtectedRoute>} />
+                        <Route path="/admin/periode" element={<ProtectedRoute roles={['admin']}><PeriodeIndex /></ProtectedRoute>} />
+                        <Route path="/admin/jurusan" element={<ProtectedRoute roles={['admin']}><JurusanIndex /></ProtectedRoute>} />
+                        <Route path="/admin/alumni" element={<ProtectedRoute roles={['admin']}><AlumniIndex /></ProtectedRoute>} />
+                        <Route path="/admin/monitoring" element={<ProtectedRoute roles={['admin']}><MonitoringIndex /></ProtectedRoute>} />
+                        <Route path="/admin/promotion" element={<ProtectedRoute roles={['admin']}><PromotionIndex /></ProtectedRoute>} />
+                        <Route path="/admin/settings" element={<ProtectedRoute roles={['admin']}><Settings /></ProtectedRoute>} />
+                        <Route path="/admin/bwm/setting" element={<ProtectedRoute roles={['admin']}><BwmSetting /></ProtectedRoute>} />
 
-                    {/* ADMIN ROUTES */}
-                    <Route path="/admin/kriteria" element={<ProtectedRoute roles={['admin']}><KriteriaIndex /></ProtectedRoute>} />
-                    <Route path="/admin/periode" element={<ProtectedRoute roles={['admin']}><PeriodeIndex /></ProtectedRoute>} />
-                    <Route path="/admin/jurusan" element={<ProtectedRoute roles={['admin']}><JurusanIndex /></ProtectedRoute>} />
-                    <Route path="/admin/alumni" element={<ProtectedRoute roles={['admin']}><AlumniIndex /></ProtectedRoute>} />
-                    <Route path="/admin/monitoring" element={<ProtectedRoute roles={['admin']}><MonitoringIndex /></ProtectedRoute>} />
-                    <Route path="/admin/promotion" element={<ProtectedRoute roles={['admin']}><PromotionIndex /></ProtectedRoute>} />
-                    <Route path="/admin/settings" element={<ProtectedRoute roles={['admin']}><Settings /></ProtectedRoute>} />
-                    <Route path="/admin/bwm/setting" element={<ProtectedRoute roles={['admin']}><BwmSetting /></ProtectedRoute>} />
+                        {/* PAKAR ROUTES */}
+                        <Route path="/pakar/bwm" element={<ProtectedRoute roles={['pakar']}><BwmInput /></ProtectedRoute>} />
+                        <Route path="/pakar/kriteria" element={<ProtectedRoute roles={['pakar']}><KriteriaPakar /></ProtectedRoute>} />
 
-                    {/* PAKAR ROUTES */}
-                    <Route path="/pakar/bwm" element={<ProtectedRoute roles={['pakar']}><BwmInput /></ProtectedRoute>} />
-                    <Route path="/pakar/kriteria" element={<ProtectedRoute roles={['pakar']}><KriteriaPakar /></ProtectedRoute>} />
+                        {/* SISWA ROUTES */}
+                        <Route path="/siswa/input" element={<ProtectedRoute roles={['siswa']}><InputDataSiswa /></ProtectedRoute>} />
+                        <Route path="/siswa/result" element={<ProtectedRoute roles={['siswa']}><ResultSiswa /></ProtectedRoute>} />
+                    </Route>
 
-                    {/* SISWA ROUTES */}
-                    <Route path="/siswa/input" element={<ProtectedRoute roles={['siswa']}><InputDataSiswa /></ProtectedRoute>} />
-                    <Route path="/siswa/result" element={<ProtectedRoute roles={['siswa']}><ResultSiswa /></ProtectedRoute>} />
-
-                </Route>
-
-                <Route path="*" element={<div className="p-10 text-center">404 | Not Found</div>}/>
-            </Routes>
+                    <Route path="*" element={<div className="p-10 text-center">404 | Not Found</div>}/>
+                </Routes>
+            </LayoutProvider>
         </Router>
     );
 }
+
 export default App;

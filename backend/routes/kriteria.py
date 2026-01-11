@@ -72,22 +72,29 @@ def store():
 @jwt_required()
 def update(id):
     claims = get_jwt()
-    if claims.get('role') != 'admin':
+    role = claims.get('role')
+
+    # FIX: Izinkan Admin ATAU Pakar
+    if role not in ['admin', 'pakar']:
         return jsonify({'msg': 'Akses ditolak'}), 403
 
     kriteria = Kriteria.query.get_or_404(id)
     data = request.get_json()
 
     try:
-        # Update field jika ada di request
-        if 'kode' in data: kriteria.kode = data['kode']
-        if 'nama' in data: kriteria.nama = data['nama']
+        # Jika Pakar, biasanya hanya ubah pertanyaan, tapi kita biarkan fleksibel
+        # validasi sisi frontend yang akan membatasi inputannya
+
+        if 'kode' in data and role == 'admin': kriteria.kode = data['kode']  # Kode hanya admin
+        if 'nama' in data and role == 'admin': kriteria.nama = data['nama']  # Nama hanya admin
+
+        # Pertanyaan boleh diubah Pakar & Admin
         if 'pertanyaan' in data: kriteria.pertanyaan = data['pertanyaan']
+
         if 'tipe_input' in data: kriteria.tipe_input = data['tipe_input']
         if 'atribut' in data: kriteria.atribut = data['atribut']
         if 'kategori' in data: kriteria.kategori = data['kategori']
 
-        # UPDATE FIELD BARU:
         if 'sumber_nilai' in data: kriteria.sumber_nilai = data['sumber_nilai']
         if 'penanggung_jawab' in data: kriteria.penanggung_jawab = data['penanggung_jawab']
         if 'tampil_di_siswa' in data: kriteria.tampil_di_siswa = bool(data['tampil_di_siswa'])

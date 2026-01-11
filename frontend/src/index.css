@@ -1,5 +1,20 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/forms";
 
+/* Override warna NProgress agar sesuai tema Laravel Breeze */
+#nprogress .bar {
+    background: #2237c3 !important; /* Gray-600 */
+    height: 3px !important; /* Sedikit lebih tebal agar terlihat jelas */
+}
+
+#nprogress .peg {
+    box-shadow: 0 0 10px #4B5563, 0 0 5px #4B5563 !important;
+}
+
+/* Pastikan z-index tinggi agar tidak tertutup navbar */
+#nprogress {
+    z-index: 99999;
+}
 
 /*:root {*/
 /*  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;*/

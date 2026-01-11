@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, {useEffect, useState} from 'react';
 import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
 import PrimaryButton from '../../../components/PrimaryButton';
+import apiClient from "../../../lib/axios.ts";
 
 export default function PromotionIndex() {
     const [stats, setStats] = useState<any>(null);
@@ -8,19 +9,18 @@ export default function PromotionIndex() {
     const [processing, setProcessing] = useState(false);
 
     const fetchStats = async () => {
-        const token = localStorage.getItem('token');
+        setLoading(true)
+
         try {
-            const res = await fetch('http://localhost:5000/api/promotion/summary', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const json = await res.json();
-            if (res.ok) setStats(json);
-        } catch (e) {
-            console.error(e);
+            const res = await apiClient.get('/promotion/summary')
+            setStats(res.data)
+        } catch (err) {
+            console.error(err)
         } finally {
-            setLoading(false);
+            setLoading(false)
         }
-    };
+    }
+
 
     useEffect(() => {
         fetchStats();
@@ -37,30 +37,29 @@ export default function PromotionIndex() {
         if (!confirm('Apakah Anda benar-benar yakin? (Konfirmasi 2x)')) return;
 
         setProcessing(true);
-        const token = localStorage.getItem('token');
 
         try {
-            const res = await fetch('/api/promotion/execute', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                }
-            });
-            const json = await res.json();
+            const res = await apiClient.post('/promotion/execute')
 
-            if (res.ok) {
-                alert(`BERHASIL!\n\nDetail:\n- Lulus: ${json.details.lulus}\n- Naik ke 12: ${json.details.naik_ke_12}\n- Naik ke 11: ${json.details.naik_ke_11}`);
-                fetchStats();
+            const d = res.data.details
+            alert(
+                `BERHASIL!\n\n` +
+                `- Lulus: ${d.lulus}\n` +
+                `- Naik ke 12: ${d.naik_ke_12}\n` +
+                `- Naik ke 11: ${d.naik_ke_11}`
+            )
+
+            fetchStats()
+        } catch (err) {
+            if (err.response?.data?.msg) {
+                alert('Gagal: ' + err.response.data.msg)
             } else {
-                alert('Gagal: ' + json.msg);
+                alert('Error koneksi server')
             }
-        } catch (e) {
-            alert('Error koneksi');
         } finally {
-            setProcessing(false);
+            setProcessing(false)
         }
-    };
+    }
 
     if (loading) return <div className="p-10 text-center">Loading Summary...</div>;
 
@@ -74,7 +73,8 @@ export default function PromotionIndex() {
                             <div className="ml-3">
                                 <p className="text-sm text-yellow-700">
                                     Fitur ini digunakan untuk memproses perpindahan tahun ajaran.
-                                    Pastikan semua nilai siswa untuk periode saat ini sudah rampung sebelum melakukan eksekusi.
+                                    Pastikan semua nilai siswa untuk periode saat ini sudah rampung sebelum melakukan
+                                    eksekusi.
                                 </p>
                             </div>
                         </div>
@@ -82,7 +82,8 @@ export default function PromotionIndex() {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* CARD KELAS 10 */}
-                        <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border-t-4 border-blue-500">
+                        <div
+                            className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border-t-4 border-blue-500">
                             <div className="text-gray-500 text-sm font-medium uppercase">Kelas 10 (Sekarang)</div>
                             <div className="mt-2 flex items-baseline">
                                 <span className="text-3xl font-extrabold text-gray-900">{stats?.kelas_10 || 0}</span>
@@ -94,7 +95,8 @@ export default function PromotionIndex() {
                         </div>
 
                         {/* CARD KELAS 11 */}
-                        <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border-t-4 border-indigo-500">
+                        <div
+                            className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border-t-4 border-indigo-500">
                             <div className="text-gray-500 text-sm font-medium uppercase">Kelas 11 (Sekarang)</div>
                             <div className="mt-2 flex items-baseline">
                                 <span className="text-3xl font-extrabold text-gray-900">{stats?.kelas_11 || 0}</span>
@@ -106,7 +108,8 @@ export default function PromotionIndex() {
                         </div>
 
                         {/* CARD KELAS 12 */}
-                        <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border-t-4 border-green-500">
+                        <div
+                            className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border-t-4 border-green-500">
                             <div className="text-gray-500 text-sm font-medium uppercase">Kelas 12 (Sekarang)</div>
                             <div className="mt-2 flex items-baseline">
                                 <span className="text-3xl font-extrabold text-gray-900">{stats?.kelas_12 || 0}</span>
@@ -118,7 +121,8 @@ export default function PromotionIndex() {
                         </div>
                     </div>
 
-                    <div className="bg-white shadow sm:rounded-lg p-6 flex flex-col items-center justify-center text-center space-y-4">
+                    <div
+                        className="bg-white shadow sm:rounded-lg p-6 flex flex-col items-center justify-center text-center space-y-4">
                         <h3 className="text-lg font-bold text-gray-900">Eksekusi Kenaikan Kelas</h3>
                         <p className="max-w-xl text-gray-500">
                             Tombol di bawah akan memproses semua siswa secara otomatis.

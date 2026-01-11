@@ -1,4 +1,4 @@
-import React, {JSX} from 'react';
+import React, {JSX, useEffect} from 'react';
 import {BrowserRouter as Router, Routes, Route, Navigate, useLocation} from 'react-router-dom';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -19,12 +19,20 @@ import KriteriaPakar from './pages/pakar/kriteria/Input';
 // Siswa Pages
 import InputDataSiswa from "./pages/siswa/InputData";
 import ResultSiswa from "./pages/siswa/Result";
+import BwmSetting from "./pages/admin/bwm/Setting.tsx";
+import NProgress from "nprogress";
 
 // --- COMPONENT PROTECTED ROUTE DENGAN ROLE ---
 const ProtectedRoute = ({children, roles}: { children: JSX.Element, roles?: string[] }) => {
     const token = localStorage.getItem('token');
     const userRole = localStorage.getItem('role'); // Pastikan simpan role saat login
     const location = useLocation();
+
+    useEffect(() => {
+        // Start dan Done dipanggil cepat untuk memberi efek "loading sekejap" saat pindah halaman
+        NProgress.start();
+        NProgress.done();
+    }, [location]);
 
     if (!token) {
         return <Navigate to="/login" state={{ from: location }} replace/>;
@@ -55,6 +63,7 @@ function App() {
                 <Route path="/admin/monitoring" element={<ProtectedRoute roles={['admin']}><MonitoringIndex/></ProtectedRoute>}/>
                 <Route path="/admin/promotion" element={<ProtectedRoute roles={['admin']}><PromotionIndex/></ProtectedRoute>}/>
                 <Route path="/admin/settings" element={<ProtectedRoute roles={['admin']}><Settings/></ProtectedRoute>}/>
+                <Route path="/admin/bwm/setting" element={<BwmSetting />} />
 
                 {/* --- GROUP PAKAR --- */}
                 <Route path="/pakar/bwm" element={<ProtectedRoute roles={['pakar']}><BwmInput/></ProtectedRoute>}/>

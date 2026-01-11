@@ -5,6 +5,7 @@ import Modal from '../../../components/Modal';
 import TextInput from '../../../components/TextInput';
 import InputLabel from '../../../components/InputLabel';
 import AuthenticatedLayout from "../../../Layouts/AuthenticatedLayout.tsx";
+import apiClient from "../../../lib/axios.ts";
 
 interface Kriteria {
     id?: number;
@@ -38,20 +39,18 @@ export default function KriteriaIndex() {
 
     // --- FETCH DATA ---
     const fetchData = async () => {
-        const token = localStorage.getItem('token');
-        setLoading(true);
+        setLoading(true)
+
         try {
-            const res = await fetch('/api/kriteria', {
-                headers: {'Authorization': `Bearer ${token}`}
-            });
-            const json = await res.json();
-            if (res.ok) setData(json.data);
+            const res = await apiClient.get('/kriteria')
+            setData(res.data.data)
         } catch (err) {
-            console.error(err);
+            console.error(err)
         } finally {
-            setLoading(false);
+            setLoading(false)
         }
-    };
+    }
+
 
     useEffect(() => {
         fetchData();
@@ -75,53 +74,42 @@ export default function KriteriaIndex() {
         setForm(initialFormState);
     };
 
-    const handleSubmit: FormEventHandler = async (e) => {
-        e.preventDefault();
-        setProcessing(true);
-        const token = localStorage.getItem('token');
+    const handleSubmit = async (e) => {
+        e.preventDefault()
+        setProcessing(true)
 
         try {
-            const url = isEditing
-                ? `http://localhost:5000/api/kriteria/${form.id}`
-                : 'http://localhost:5000/api/kriteria';
-
-            const method = isEditing ? 'PUT' : 'POST';
-
-            const res = await fetch(url, {
-                method: method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(form)
-            });
-
-            const json = await res.json();
-
-            if (res.ok) {
-                alert(json.msg || 'Berhasil disimpan!');
-                closeModal();
-                fetchData(); // Refresh data
+            if (isEditing) {
+                await apiClient.put(`/kriteria/${form.id}`, form)
             } else {
-                alert(json.msg || 'Gagal menyimpan data.');
+                await apiClient.post('/kriteria', form)
             }
-        } catch (error) {
-            console.error(error);
-            alert('Terjadi kesalahan sistem.');
-        } finally {
-            setProcessing(false);
-        }
-    };
 
-    const handleDelete = async (id: number) => {
-        if (!confirm('Yakin ingin menghapus data ini?')) return;
-        const token = localStorage.getItem('token');
-        await fetch(`http://localhost:5000/api/kriteria/${id}`, {
-            method: 'DELETE',
-            headers: {'Authorization': `Bearer ${token}`}
-        });
-        fetchData();
-    };
+            alert('Berhasil disimpan!')
+            closeModal()
+            fetchData()
+        } catch (err) {
+            if (err.response?.data?.msg) {
+                alert(err.response.data.msg)
+            } else {
+                alert('Gagal menyimpan data')
+            }
+        } finally {
+            setProcessing(false)
+        }
+    }
+
+    const handleDelete = async (id) => {
+        if (!confirm('Yakin ingin menghapus data ini?')) return
+
+        try {
+            await apiClient.delete(`/kriteria/${id}`)
+            fetchData()
+        } catch (err) {
+            alert('Gagal menghapus data')
+        }
+    }
+
 
     return (
         <AuthenticatedLayout header={<h2 className="font-semibold text-xl text-gray-800">Manajemen Kriteria</h2>}>
@@ -268,7 +256,7 @@ export default function KriteriaIndex() {
 
                         {/* Tombol Aksi */}
                         <div className="mt-6 flex justify-end gap-3">
-                            <SecondaryButton onClick={closeModal} disabled={processing}>
+                            <SecondaryButton  type="button" onClick={closeModal} disabled={processing}>
                                 Batal
                             </SecondaryButton>
                             <PrimaryButton disabled={processing}>

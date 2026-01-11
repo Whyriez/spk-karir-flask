@@ -1,4 +1,5 @@
-import React, { ReactNode } from 'react';
+import { Fragment } from 'react';
+import { Dialog, DialogPanel, Transition, TransitionChild } from '@headlessui/react';
 
 export default function Modal({
     children,
@@ -7,14 +8,12 @@ export default function Modal({
     closeable = true,
     onClose = () => {},
 }: {
-    children: ReactNode;
+    children: React.ReactNode;
     show: boolean;
     maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
     closeable?: boolean;
     onClose?: () => void;
 }) {
-    if (!show) return null;
-
     const close = () => {
         if (closeable) {
             onClose();
@@ -30,20 +29,48 @@ export default function Modal({
     }[maxWidth];
 
     return (
-        <div className="fixed inset-0 overflow-y-auto px-4 py-6 sm:px-0 z-50 flex items-center justify-center">
-            {/* Backdrop Gelap */}
-            {/* Kita biarkan fixed agar selalu menutup layar meski di-scroll */}
-            <div className="fixed inset-0 transform transition-all" onClick={close}>
-                <div className="absolute inset-0 bg-gray-900 opacity-75"></div>
-            </div>
-
-            {/* Konten Modal */}
-            {/* PERBAIKAN: Tambahkan 'relative z-50' agar konten memaksa tampil di atas backdrop */}
-            <div
-                className={`mb-6 bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:w-full sm:mx-auto ${maxWidthClass} relative z-50`}
+        <Transition show={show} as={Fragment} leave="duration-200">
+            <Dialog
+                as="div"
+                id="modal"
+                className="relative z-50" // z-50 memastikan modal di atas elemen lain
+                onClose={close}
             >
-                {children}
-            </div>
-        </div>
+                {/* Backdrop (Layar Gelap) */}
+                <TransitionChild
+                    as={Fragment}
+                    enter="ease-out duration-300"
+                    enterFrom="opacity-0"
+                    enterTo="opacity-100"
+                    leave="ease-in duration-200"
+                    leaveFrom="opacity-100"
+                    leaveTo="opacity-0"
+                >
+                    <div className="fixed inset-0 bg-gray-500/75 transition-opacity" />
+                </TransitionChild>
+
+                {/* Wrapper untuk centering dan scrolling */}
+                <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
+                    <div className="flex min-h-full items-center justify-center p-4 text-center sm:p-0">
+                        {/* Panel Konten */}
+                        <TransitionChild
+                            as={Fragment}
+                            enter="ease-out duration-300"
+                            enterFrom="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                            enterTo="opacity-100 translate-y-0 sm:scale-100"
+                            leave="ease-in duration-200"
+                            leaveFrom="opacity-100 translate-y-0 sm:scale-100"
+                            leaveTo="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                        >
+                            <DialogPanel
+                                className={`relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full ${maxWidthClass}`}
+                            >
+                                {children}
+                            </DialogPanel>
+                        </TransitionChild>
+                    </div>
+                </div>
+            </Dialog>
+        </Transition>
     );
 }

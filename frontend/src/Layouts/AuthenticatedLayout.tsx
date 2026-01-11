@@ -1,4 +1,4 @@
-import {useState, useMemo, memo} from 'react';
+import {useState, useMemo, memo, useEffect} from 'react';
 import {Link, useLocation, Outlet} from 'react-router-dom';
 import ApplicationLogo from '@/components/ApplicationLogo';
 import Dropdown from '@/components/Dropdown';
@@ -16,6 +16,12 @@ const Navbar = memo(function Navbar({
     showingDropdown,
     setShowingDropdown
 }: any) {
+    const location = useLocation();
+
+    // Close mobile dropdown saat route berubah
+    useEffect(() => {
+        setShowingDropdown(false);
+    }, [location.pathname, setShowingDropdown]);
     return (
         <nav className="border-b border-gray-100 bg-white sticky top-0 z-50 shadow-sm">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

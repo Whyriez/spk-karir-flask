@@ -33,7 +33,7 @@ export default function Modal({
             <Dialog
                 as="div"
                 id="modal"
-                className="relative z-50" // z-50 memastikan modal di atas elemen lain
+                 className="fixed inset-0 z-[100] flex overflow-y-auto px-4 py-6 sm:px-0 items-center"
                 onClose={close}
             >
                 {/* Backdrop (Layar Gelap) */}

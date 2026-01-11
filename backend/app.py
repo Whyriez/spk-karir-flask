@@ -16,6 +16,7 @@ from routes.alumni import alumni_bp
 from routes.monitoring import monitoring_bp
 from routes.promotion import promotion_bp
 from routes.settings import settings_bp
+from routes.nilai_static import nilai_static_bp
 
 from command import seed_db, migrate_fresh
 # Import konfigurasi dan database yang sudah kita siapkan
@@ -63,6 +64,7 @@ app.register_blueprint(alumni_bp, url_prefix='/api/alumni')
 app.register_blueprint(monitoring_bp, url_prefix='/api/monitoring')
 app.register_blueprint(promotion_bp, url_prefix='/api/promotion')
 app.register_blueprint(settings_bp, url_prefix='/api/settings')
+app.register_blueprint(nilai_static_bp, url_prefix='/api/nilai-static')
 
 
 

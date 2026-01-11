@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, url_for
 from flask_jwt_extended import jwt_required, get_jwt
-from sqlalchemy import or_, and_, desc
+from sqlalchemy import or_, and_, desc, asc
 from models import db, User, HasilRekomendasi, Periode, Jurusan, RoleEnum
 
 monitoring_bp = Blueprint('monitoring', __name__)

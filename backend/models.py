@@ -112,6 +112,17 @@ class Kriteria(db.Model):
     penanggung_jawab = db.Column(db.String(50), default='gurubk', nullable=True)
     # ----------------------------
 
+    # 1. Target Relevansi: Menentukan kriteria ini masuk ke perhitungan mana
+    # Isi: "studi,kerja,wirausaha" atau "all"
+    target_jalur = db.Column(db.String(255), default='all', nullable=True)
+
+    # 2. Skala Maksimal: Untuk normalisasi/inversi nilai (misal C1=100, C4=5)
+    skala_maks = db.Column(db.Float, default=5, nullable=False)
+
+    # 3. Target Inversi: Untuk logika "Kebalikan" (misal: Ekonomi rendah = Bagus buat Kerja)
+    # Isi: "kerja" (artinya nilainya dibalik khusus untuk jalur kerja)
+    jalur_reverse = db.Column(db.String(255), nullable=True)
+
     created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
     updated_at = db.Column(db.DateTime(timezone=True), onupdate=func.now())
 

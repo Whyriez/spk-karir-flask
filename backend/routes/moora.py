@@ -40,49 +40,61 @@ def get_aggregated_weights():
 
 
 def calculate_ranking(periode_id, user_id):
-    """Logika MOORA murni sesuai Proposal Bab 3"""
     ensure_static_values(user_id)
     siswa = User.query.get(user_id)
 
-    # 1. Ambil Nilai Siswa
+    # 1. Ambil Kriteria & Config dari DB
+    all_kriteria = Kriteria.query.order_by(Kriteria.kode).all()
+    num_kriteria = len(all_kriteria)
+
+    # Ambil Nilai Siswa
     nilai_records = NilaiSiswa.query.filter_by(siswa_id=user_id).all()
-    if not nilai_records:
-        return None, "Belum ada data nilai. Silakan isi kuesioner."
-
-    raw_data = {Kriteria.query.get(n.kriteria_id).kode: n.nilai_input for n in nilai_records if Kriteria.query.get(n.kriteria_id)}
-
-    # Standarisasi C1 ke skala 1-5 jika perlu
-    if 'C1' in raw_data and raw_data['C1'] > 5:
-        raw_data['C1'] = 1 + (raw_data['C1'] * 0.04)
+    raw_data = {}
+    for n in nilai_records:
+        k_obj = Kriteria.query.get(n.kriteria_id)
+        if k_obj:
+            raw_data[k_obj.kode] = n.nilai_input
 
     # 2. Ambil Bobot
-    bobot = get_aggregated_weights()
+    bobot_map = get_aggregated_weights()
 
-    # 3. Matriks Keputusan 3 Alternatif x 8 Kriteria
+    # 3. Bentuk Matriks Keputusan (3 Alternatif x N Kriteria)
     alternatif_names = ['Melanjutkan Studi', 'Bekerja', 'Berwirausaha']
-    kriteria_codes = ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8']
-    matrix = np.zeros((3, 8))
+    # Mapping index baris: 0=Studi, 1=Kerja, 2=Wirausaha
+    matrix = np.zeros((3, num_kriteria))
 
-    for j, code in enumerate(kriteria_codes):
-        val = raw_data.get(code, 1)  # Nilai default 1 jika data kosong
+    for j, k in enumerate(all_kriteria):
+        val = raw_data.get(k.kode, 1)  # Nilai default 1
 
-        # Mapping Alternatif sesuai Proposal Hal 74-75
-        if code in ['C1', 'C5']:  # Akademik & Motivasi: Relevan ke semua
-            matrix[0, j] = matrix[1, j] = matrix[2, j] = val
-        elif code == 'C2':  # Minat Studi: Hanya ke Studi
-            matrix[0, j], matrix[1, j], matrix[2, j] = val, 1, 1
-        elif code == 'C3':  # Minat Kerja: Hanya ke Kerja
-            matrix[0, j], matrix[1, j], matrix[2, j] = 1, val, 1
-        elif code == 'C4':  # Ekonomi: Studi & Wirausaha
-            matrix[0, j], matrix[1, j], matrix[2, j] = val, 1, val
-        elif code == 'C6':  # Lapangan Kerja: Studi & Kerja
-            matrix[0, j], matrix[1, j], matrix[2, j] = val, val, 1
-        elif code == 'C7' or code == 'C8':  # Minat Usaha & Modal: Hanya Wirausaha
-            matrix[0, j], matrix[1, j], matrix[2, j] = 1, 1, val
+        # Baca Config Dinamis dari Database
+        targets = (k.target_jalur or '').lower()
+        reverses = (k.jalur_reverse or '').lower()
+        max_scale = k.skala_maks  # Misal 100 utk C1, 5 utk C4
 
-    # 4. Normalisasi Vektor
-    norm_matrix = np.zeros((3, 8))
-    for j in range(8):
+        # Fungsi helper untuk menentukan nilai sel matriks
+        def get_val_for_jalur(jalur_name):
+            # 1. Cek apakah kriteria ini relevan untuk jalur ini?
+            if 'all' in targets or jalur_name in targets:
+                # 2. Cek apakah nilainya harus dibalik? (Misal Ekonomi utk Kerja)
+                if jalur_name in reverses:
+                    # Rumus Inversi: (Max + 1) - Val. Contoh skala 5: (6 - 1) = 5
+                    return (max_scale + 1) - val
+                return val
+            return 1  # Nilai default jika tidak relevan (Netral di MOORA Benefit)
+
+        # Isi Matriks
+        matrix[0, j] = get_val_for_jalur('studi')
+        matrix[1, j] = get_val_for_jalur('kerja')
+        matrix[2, j] = get_val_for_jalur('wirausaha')
+
+        # CATATAN: Isu normalisasi skala beda (0-100 vs 1-5)
+        # SUDAH otomatis ditangani oleh rumus MOORA (Vector Normalization) di bawah.
+        # Jadi kita TIDAK PERLU codingan khusus pembagi skala.
+
+    # 4. Normalisasi Vektor (Otomatis menangani skala 100 vs 5)
+    norm_matrix = np.zeros((3, num_kriteria))
+    for j in range(num_kriteria):
+        # Rumus: x / sqrt(sum(x^2))
         denom = math.sqrt(sum(matrix[i, j] ** 2 for i in range(3)))
         for i in range(3):
             norm_matrix[i, j] = matrix[i, j] / denom if denom > 0 else 0
@@ -90,10 +102,19 @@ def calculate_ranking(periode_id, user_id):
     # 5. Optimasi Yi (Benefit - Cost)
     y_scores = []
     for i in range(3):
-        yi = sum(norm_matrix[i, j] * bobot.get(kriteria_codes[j], 0) for j in range(8))
+        yi = 0
+        for j in range(num_kriteria):
+            code = all_kriteria[j].kode
+            weight = bobot_map.get(code, 0)
+
+            # Cek atribut (Benefit/Cost) dari DB
+            if all_kriteria[j].atribut.value == 'benefit':
+                yi += norm_matrix[i, j] * weight
+            else:
+                yi -= norm_matrix[i, j] * weight
         y_scores.append(yi)
 
-    # 6. Simpan/Update Hasil
+    # 6. Simpan Hasil
     hasil = HasilRekomendasi.query.filter_by(siswa_id=user_id, periode_id=periode_id).first()
     if not hasil:
         hasil = HasilRekomendasi(siswa_id=user_id, periode_id=periode_id)
@@ -102,11 +123,12 @@ def calculate_ranking(periode_id, user_id):
     hasil.skor_studi = float(y_scores[0])
     hasil.skor_kerja = float(y_scores[1])
     hasil.skor_wirausaha = float(y_scores[2])
+
     hasil.keputusan_terbaik = alternatif_names[np.argmax(y_scores)]
-    if hasattr(siswa.kelas_saat_ini, 'value'):
-        hasil.tingkat_kelas = str(siswa.kelas_saat_ini.value)
-    else:
-        hasil.tingkat_kelas = str(siswa.kelas_saat_ini)
+
+    kelas_val = siswa.kelas_saat_ini
+    if hasattr(kelas_val, 'value'): kelas_val = kelas_val.value
+    hasil.tingkat_kelas = str(kelas_val)
 
     db.session.commit()
     return hasil, None

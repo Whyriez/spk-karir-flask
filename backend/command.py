@@ -49,81 +49,171 @@ def seed_jurusan():
 
 
 def seed_kriteria():
-    print("   ↳ Seeding Kriteria (8 Kriteria sesuai Proposal)...")
+    print("   ↳ Seeding Kriteria (Konfigurasi Full Dinamis)...")
+
     kriteria_list = [
-        # KELOMPOK 1: DATA AKADEMIK & EKONOMI
+        # --- KELOMPOK 1: DATA AKADEMIK ---
+
+        # C1: Nilai Akademik
+        # Relevan: Semua Jalur
+        # Skala: 100 (Sistem akan menormalisasi ini otomatis jika skala_maks diset 100)
         {
-            'kode': 'C1', 'nama': 'Nilai Akademik',
+            'kode': 'C1',
+            'nama': 'Nilai Akademik',
             'pertanyaan': 'Masukkan nilai rata-rata rapor Anda (Skala 0-100).',
-            'tipe': 'number', 'kategori': 'akademik', 'sumber': 'input_siswa',
-            'opsi': None, 'pj': 'umum'
+            'tipe': 'number',
+            'kategori': 'akademik',
+            'sumber': 'input_siswa',
+            'pj': 'umum',
+            'target': 'all',  # Relevan ke semua
+            'skala': 100,  # Skala input 0-100
+            'reverse': None  # Normal (Makin tinggi makin bagus)
         },
+
+        # C4: Kondisi Ekonomi
+        # Relevan: Semua Jalur
+        # Skala: 5
+        # Reverse: 'kerja' -> Artinya jika user pilih nilai 1 (Kurang Mampu),
+        # untuk jalur 'kerja' akan dihitung sebagai nilai 5 (Sangat Bagus/Prioritas).
         {
-            'kode': 'C4', 'nama': 'Kondisi Ekonomi',
+            'kode': 'C4',
+            'nama': 'Kondisi Ekonomi',
             'pertanyaan': 'Pilih rentang penghasilan orang tua per bulan.',
-            'tipe': 'select', 'kategori': 'akademik', 'sumber': 'input_siswa',
+            'tipe': 'select',
+            'kategori': 'akademik',
+            'sumber': 'input_siswa',
+            'pj': 'gurubk',
+            'target': 'all',
+            'skala': 5,
+            'reverse': 'kerja',  # <--- LOGIKA DINAMIS: Dibalik khusus untuk kerja
             'opsi': json.dumps([
                 {'val': 1, 'label': 'Kurang Mampu (< 1 Juta)'},
                 {'val': 2, 'label': 'Cukup (1 - 3 Juta)'},
                 {'val': 3, 'label': 'Sedang (3 - 5 Juta)'},
                 {'val': 4, 'label': 'Mampu (5 - 10 Juta)'},
                 {'val': 5, 'label': 'Sangat Mampu (> 10 Juta)'}
-            ]), 'pj': 'gurubk'
+            ])
         },
+
+        # C6: Ketersediaan Lapangan Kerja
+        # Relevan: Studi & Kerja (Wirausaha biasanya tidak terlalu bergantung pada loker jurusan)
+        # Skala: 5 (Diambil dari data statis jurusan)
         {
-            'kode': 'C6', 'nama': 'Ketersediaan Lapangan Kerja',
-            'pertanyaan': None,  # Diisi otomatis oleh sistem berdasarkan jurusan
-            'tipe': 'number', 'kategori': 'akademik', 'sumber': 'static_jurusan',
-            'opsi': None, 'pj': 'kaprodi'
+            'kode': 'C6',
+            'nama': 'Ketersediaan Lapangan Kerja',
+            'pertanyaan': None,  # Statis
+            'tipe': 'number',
+            'kategori': 'akademik',
+            'sumber': 'static_jurusan',
+            'pj': 'kaprodi',
+            'target': 'studi,kerja',  # Relevan untuk lanjut studi atau kerja linier
+            'skala': 5,
+            'reverse': None
         },
-        # KELOMPOK 2: KUESIONER MINAT (GURU BK)
+
+        # --- KELOMPOK 2: MINAT (GURU BK) ---
+
+        # C2: Minat Lanjut Studi
+        # Relevan: HANYA Studi
         {
-            'kode': 'C2', 'nama': 'Minat Lanjut Studi',
-            'pertanyaan': 'Seberapa besar keinginan dan rencana Anda untuk melanjutkan pendidikan ke Perguruan Tinggi (Kuliah)?',
-            'tipe': 'likert', 'kategori': 'kuesioner', 'sumber': 'input_siswa',
-            'opsi': None, 'pj': 'gurubk'
+            'kode': 'C2',
+            'nama': 'Minat Lanjut Studi',
+            'pertanyaan': 'Seberapa besar keinginan dan rencana Anda untuk melanjutkan pendidikan ke Perguruan Tinggi?',
+            'tipe': 'likert',
+            'kategori': 'kuesioner',
+            'sumber': 'input_siswa',
+            'pj': 'gurubk',
+            'target': 'studi',  # <--- Spesifik
+            'skala': 5,
+            'reverse': None
         },
+
+        # C3: Minat Lanjut Kerja
+        # Relevan: HANYA Kerja
         {
-            'kode': 'C3', 'nama': 'Minat Lanjut Kerja',
-            'pertanyaan': 'Seberapa siap Anda secara mental dan skill untuk langsung bekerja di dunia industri setelah lulus?',
-            'tipe': 'likert', 'kategori': 'kuesioner', 'sumber': 'input_siswa',
-            'opsi': None, 'pj': 'gurubk'
+            'kode': 'C3',
+            'nama': 'Minat Lanjut Kerja',
+            'pertanyaan': 'Seberapa siap Anda secara mental dan skill untuk langsung bekerja setelah lulus?',
+            'tipe': 'likert',
+            'kategori': 'kuesioner',
+            'sumber': 'input_siswa',
+            'pj': 'gurubk',
+            'target': 'kerja',  # <--- Spesifik
+            'skala': 5,
+            'reverse': None
         },
+
+        # C5: Motivasi & Dukungan Ortu
+        # Relevan: Semua Jalur (Dukungan ortu penting untuk apapun)
         {
-            'kode': 'C5', 'nama': 'Motivasi & Dukungan Ortu',
-            'pertanyaan': 'Seberapa besar dukungan orang tua dan motivasi diri Anda terhadap pilihan karir yang akan diambil?',
-            'tipe': 'likert', 'kategori': 'kuesioner', 'sumber': 'input_siswa',
-            'opsi': None, 'pj': 'gurubk'
+            'kode': 'C5',
+            'nama': 'Motivasi & Dukungan Ortu',
+            'pertanyaan': 'Seberapa besar dukungan orang tua dan motivasi diri Anda terhadap pilihan karir ini?',
+            'tipe': 'likert',
+            'kategori': 'kuesioner',
+            'sumber': 'input_siswa',
+            'pj': 'gurubk',
+            'target': 'all',  # Relevan semua
+            'skala': 5,
+            'reverse': None
         },
-        # KELOMPOK 3: KUESIONER WIRAUSAHA (KAPRODI)
+
+        # --- KELOMPOK 3: WIRAUSAHA (KAPRODI) ---
+
+        # C7: Minat Wirausaha
+        # Relevan: HANYA Wirausaha
         {
-            'kode': 'C7', 'nama': 'Minat Wirausaha',
-            'pertanyaan': 'Seberapa besar ketertarikan Anda untuk memulai dan mengelola bisnis/usaha sendiri?',
-            'tipe': 'likert', 'kategori': 'kuesioner', 'sumber': 'input_siswa',
-            'opsi': None, 'pj': 'kaprodi'
+            'kode': 'C7',
+            'nama': 'Minat Wirausaha',
+            'pertanyaan': 'Seberapa besar ketertarikan Anda untuk memulai bisnis sendiri?',
+            'tipe': 'likert',
+            'kategori': 'kuesioner',
+            'sumber': 'input_siswa',
+            'pj': 'kaprodi',
+            'target': 'wirausaha',  # <--- Spesifik
+            'skala': 5,
+            'reverse': None
         },
+
+        # C8: Ketersediaan Modal/Aset
+        # Relevan: HANYA Wirausaha
         {
-            'kode': 'C8', 'nama': 'Ketersediaan Modal/Aset',
-            'pertanyaan': 'Seberapa siap ketersediaan modal atau aset awal (tempat/alat) jika Anda memutuskan untuk berwirausaha?',
-            'tipe': 'likert', 'kategori': 'kuesioner', 'sumber': 'input_siswa',
-            'opsi': None, 'pj': 'kaprodi'
+            'kode': 'C8',
+            'nama': 'Ketersediaan Modal/Aset',
+            'pertanyaan': 'Seberapa siap ketersediaan modal atau aset awal jika berwirausaha?',
+            'tipe': 'likert',
+            'kategori': 'kuesioner',
+            'sumber': 'input_siswa',
+            'pj': 'kaprodi',
+            'target': 'wirausaha',  # <--- Spesifik
+            'skala': 5,
+            'reverse': None
         },
     ]
 
     for data in kriteria_list:
+        # Cek apakah kriteria sudah ada
         k = Kriteria.query.filter_by(kode=data['kode']).first()
         if not k:
             k = Kriteria(kode=data['kode'])
 
-        # Update/Set data sesuai proposal
+        # Update Field Standar
         k.nama = data['nama']
         k.pertanyaan = data['pertanyaan']
         k.tipe_input = data['tipe']
-        k.opsi_pilihan = data['opsi']
+        k.opsi_pilihan = data.get('opsi')  # Bisa None
         k.kategori = data['kategori']
         k.sumber_nilai = data['sumber']
-        k.penanggung_jawab = data['pj']  # Penanggung jawab untuk filter BWM
-        k.atribut = 'benefit'  # Sesuai proposal Hal. 75
+        k.penanggung_jawab = data['pj']
+
+        # Update Field Dinamis (Hasil Revisi)
+        k.target_jalur = data['target']
+        k.skala_maks = data['skala']
+        k.jalur_reverse = data['reverse']
+
+        # Set atribut default Benefit (Bisa diubah manual lewat UI Admin jika perlu Cost)
+        # Tapi secara default semua benefit, kecuali yang di-reverse lewat logika target
+        k.atribut = 'benefit'
 
         db.session.add(k)
 

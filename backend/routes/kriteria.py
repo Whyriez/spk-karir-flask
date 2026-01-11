@@ -19,16 +19,19 @@ def get_kriteria():
             'kode': k.kode,
             'nama': k.nama,
             'pertanyaan': k.pertanyaan,
-            # Pastikan konversi Enum ke string aman
+            # Handle Enum/String conversion safely
             'tipe_input': k.tipe_input.value if hasattr(k.tipe_input, 'value') else str(k.tipe_input),
             'atribut': k.atribut.value if hasattr(k.atribut, 'value') else str(k.atribut),
             'kategori': k.kategori.value if hasattr(k.kategori, 'value') else str(k.kategori),
-
-            # TAMBAHAN PENTING (Agar kolom tabel frontend muncul):
             'sumber_nilai': k.sumber_nilai.value if hasattr(k.sumber_nilai, 'value') else str(k.sumber_nilai),
-            'penanggung_jawab': k.penanggung_jawab.value if hasattr(k.penanggung_jawab, 'value') else str(
-                k.penanggung_jawab),
-            'tampil_di_siswa': k.tampil_di_siswa
+            'penanggung_jawab': k.penanggung_jawab if isinstance(k.penanggung_jawab, str) else k.penanggung_jawab.value, # Handle variasi tipe data
+            'tampil_di_siswa': k.tampil_di_siswa,
+
+            # --- FIELD BARU (WAJIB ADA AGAR TABEL FRONTEND MUNCUL) ---
+            'target_jalur': k.target_jalur or 'all',
+            'skala_maks': k.skala_maks,
+            'jalur_reverse': k.jalur_reverse
+            # ---------------------------------------------------------
         })
 
     return jsonify({'data': data})
@@ -44,63 +47,78 @@ def store():
 
     data = request.get_json()
 
+    # Validasi dasar
+    if not data.get('kode') or not data.get('nama'):
+        return jsonify({'msg': 'Kode dan Nama wajib diisi'}), 400
+
+    if Kriteria.query.filter_by(kode=data['kode']).first():
+        return jsonify({'msg': 'Kode kriteria sudah ada'}), 400
+
     try:
-        new_kriteria = Kriteria(
+        kriteria = Kriteria(
             kode=data['kode'],
             nama=data['nama'],
-            # Optional fields
-            pertanyaan=data.get('pertanyaan', ''),
-            tipe_input=data.get('tipe_input', 'number'),
+            pertanyaan=data.get('pertanyaan'),
+            tipe_input=data.get('tipe_input', 'likert'),
             atribut=data.get('atribut', 'benefit'),
             kategori=data.get('kategori', 'kuesioner'),
-
-            # FIELD BARU (Penting untuk UI):
             sumber_nilai=data.get('sumber_nilai', 'input_siswa'),
             penanggung_jawab=data.get('penanggung_jawab', 'gurubk'),
-            tampil_di_siswa=bool(data.get('tampil_di_siswa', True))
+            tampil_di_siswa=bool(data.get('tampil_di_siswa', True)),
+
+            # --- KONFIGURASI DINAMIS ---
+            target_jalur=data.get('target_jalur', 'all'),
+            skala_maks=float(data.get('skala_maks', 5)),
+            jalur_reverse=data.get('jalur_reverse') or None  # Simpan None jika string kosong
+            # ---------------------------
         )
-        db.session.add(new_kriteria)
+
+        db.session.add(kriteria)
         db.session.commit()
-        return jsonify({'msg': 'Kriteria berhasil ditambah'}), 201
+        return jsonify({'msg': 'Kriteria berhasil ditambahkan', 'data': {'id': kriteria.id}}), 201
+
     except Exception as e:
         db.session.rollback()
-        print("Error Create Kriteria:", str(e))
-        return jsonify({'msg': f'Gagal menyimpan: {str(e)}'}), 400
+        return jsonify({'msg': str(e)}), 400
 
 
 @kriteria_bp.route('/<int:id>', methods=['PUT'], strict_slashes=False)
 @jwt_required()
 def update(id):
     claims = get_jwt()
+    # Admin boleh edit semua, Pakar (GuruBK/Kaprodi) hanya boleh edit pertanyaan
     role = claims.get('role')
 
-    # FIX: Izinkan Admin ATAU Pakar
-    if role not in ['admin', 'pakar']:
-        return jsonify({'msg': 'Akses ditolak'}), 403
+    kriteria = Kriteria.query.get(id)
+    if not kriteria:
+        return jsonify({'msg': 'Kriteria tidak ditemukan'}), 404
 
-    kriteria = Kriteria.query.get_or_404(id)
     data = request.get_json()
 
     try:
-        # Jika Pakar, biasanya hanya ubah pertanyaan, tapi kita biarkan fleksibel
-        # validasi sisi frontend yang akan membatasi inputannya
+        # Admin: Full Access
+        if role == 'admin':
+            if 'kode' in data: kriteria.kode = data['kode']
+            if 'nama' in data: kriteria.nama = data['nama']
+            if 'tipe_input' in data: kriteria.tipe_input = data['tipe_input']
+            if 'atribut' in data: kriteria.atribut = data['atribut']
+            if 'kategori' in data: kriteria.kategori = data['kategori']
+            if 'sumber_nilai' in data: kriteria.sumber_nilai = data['sumber_nilai']
+            if 'penanggung_jawab' in data: kriteria.penanggung_jawab = data['penanggung_jawab']
+            if 'tampil_di_siswa' in data: kriteria.tampil_di_siswa = bool(data['tampil_di_siswa'])
 
-        if 'kode' in data and role == 'admin': kriteria.kode = data['kode']  # Kode hanya admin
-        if 'nama' in data and role == 'admin': kriteria.nama = data['nama']  # Nama hanya admin
+            # --- UPDATE KONFIGURASI DINAMIS ---
+            if 'target_jalur' in data: kriteria.target_jalur = data['target_jalur']
+            if 'skala_maks' in data: kriteria.skala_maks = float(data['skala_maks'])
+            if 'jalur_reverse' in data: kriteria.jalur_reverse = data['jalur_reverse'] or None
+            # ----------------------------------
 
-        # Pertanyaan boleh diubah Pakar & Admin
+        # Admin & Pakar boleh edit pertanyaan
         if 'pertanyaan' in data: kriteria.pertanyaan = data['pertanyaan']
-
-        if 'tipe_input' in data: kriteria.tipe_input = data['tipe_input']
-        if 'atribut' in data: kriteria.atribut = data['atribut']
-        if 'kategori' in data: kriteria.kategori = data['kategori']
-
-        if 'sumber_nilai' in data: kriteria.sumber_nilai = data['sumber_nilai']
-        if 'penanggung_jawab' in data: kriteria.penanggung_jawab = data['penanggung_jawab']
-        if 'tampil_di_siswa' in data: kriteria.tampil_di_siswa = bool(data['tampil_di_siswa'])
 
         db.session.commit()
         return jsonify({'msg': 'Kriteria berhasil diupdate'}), 200
+
     except Exception as e:
         db.session.rollback()
         return jsonify({'msg': str(e)}), 400

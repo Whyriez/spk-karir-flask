@@ -23,6 +23,7 @@ import ResultSiswa from "./pages/siswa/Result";
 import BwmSetting from "./pages/admin/bwm/Setting.tsx";
 import Welcome from "./pages/Welcome.tsx";
 import AuthenticatedLayout from "./Layouts/AuthenticatedLayout.tsx";
+import NilaiStaticIndex from "./pages/admin/nilai_static/Index.tsx";
 
 // Protected Route Component
 const ProtectedRoute = ({children, roles}: { children: JSX.Element, roles?: string[] }) => {
@@ -67,6 +68,7 @@ function App() {
                         <Route path="/admin/promotion" element={<ProtectedRoute roles={['admin']}><PromotionIndex /></ProtectedRoute>} />
                         <Route path="/admin/settings" element={<ProtectedRoute roles={['admin']}><Settings /></ProtectedRoute>} />
                         <Route path="/admin/bwm/setting" element={<ProtectedRoute roles={['admin']}><BwmSetting /></ProtectedRoute>} />
+                        <Route path="/admin/nilai-static" element={<NilaiStaticIndex />} />
 
                         {/* PAKAR ROUTES */}
                         <Route path="/pakar/bwm" element={<ProtectedRoute roles={['pakar']}><BwmInput /></ProtectedRoute>} />

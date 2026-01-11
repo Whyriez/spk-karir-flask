@@ -175,6 +175,7 @@ export default function AuthenticatedLayout() {
                         type: "dropdown",
                         items: [
                             {label: "Data Jurusan", to: "/admin/jurusan"},
+                            {label: "Static Jurusan", to: "/admin/nilai-static"},
                             {label: "Data Kriteria", to: "/admin/kriteria"},
                             {label: "Periode Aktif", to: "/admin/periode"},
                             {label: "Pengaturan BWM", to: "/admin/bwm/setting"},

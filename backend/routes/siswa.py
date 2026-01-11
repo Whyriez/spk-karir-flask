@@ -7,51 +7,43 @@ siswa_bp = Blueprint('siswa', __name__)
 
 
 # --- GET FORM DATA (Kriteria & Existing Values) ---
-@siswa_bp.route('/form', methods=['GET'])
+@siswa_bp.route('/form', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def get_form():
-    user_id = get_jwt_identity()
+    current_user_id = get_jwt_identity()
 
-    # 1. Ambil semua kriteria yang aktif (tampil_di_siswa=True)
-    # Urutkan berdasarkan kategori agar rapi (Akademik dulu, baru Kuesioner)
-    kriterias = Kriteria.query.filter_by(tampil_di_siswa=True).order_by(Kriteria.kategori.asc(),
-                                                                        Kriteria.id.asc()).all()
+    # Ambil kriteria yang aktif & tampil di siswa
+    kriterias = Kriteria.query.filter_by(
+        sumber_nilai='input_siswa',
+        tampil_di_siswa=True
+    ).order_by(Kriteria.kode.asc()).all()
 
-    # 2. Ambil nilai yang SUDAH pernah diisi siswa (jika ada, untuk edit mode)
-    existing_nilai = NilaiSiswa.query.filter_by(siswa_id=user_id).all()
-    nilai_map = {str(n.kriteria_id): n.nilai_input for n in existing_nilai}  # {'1': 80, '2': 5}
+    # Ambil nilai lama jika ada (untuk edit)
+    nilai_lama = NilaiSiswa.query.filter_by(siswa_id=current_user_id).all()
+    nilai_dict = {n.kriteria_id: n.nilai_input for n in nilai_lama}
 
-    form_data = []
+    data = []
     for k in kriterias:
-        # Skip kriteria statis (seperti Lapangan Kerja yang diambil dari DB Jurusan)
-        if k.sumber_nilai == 'static_jurusan':
-            continue
-
-        # Parsing Opsi Pilihan (JSON)
-        options = []
-        if k.opsi_pilihan:
+        # Parsing JSON opsi_pilihan jika berupa string (safety check)
+        opsi = k.opsi_pilihan
+        if isinstance(opsi, str):
             try:
-                if isinstance(k.opsi_pilihan, str):
-                    options = json.loads(k.opsi_pilihan)
-                else:
-                    options = k.opsi_pilihan  # Sudah object/dict
+                opsi = json.loads(opsi)
             except:
-                options = []
+                opsi = []
 
-        form_data.append({
+        data.append({
             'id': k.id,
             'kode': k.kode,
             'nama': k.nama,
             'pertanyaan': k.pertanyaan,
-            'tipe_input': k.tipe_input.value,  # number, select, likert
+            'tipe_input': k.tipe_input.value,
             'kategori': k.kategori.value,
-            'options': options,
-            'value': nilai_map.get(str(k.id), '')  # Isi nilai lama jika ada
+            'opsi_pilihan': opsi,  # <--- PENTING: Kirim list opsi
+            'value': nilai_dict.get(k.id, '')
         })
 
-    return jsonify({
-        'data': form_data
-    })
+    return jsonify({'data': data})
 
 
 # --- SAVE VALUES ---

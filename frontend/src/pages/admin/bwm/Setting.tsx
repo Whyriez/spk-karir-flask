@@ -1,5 +1,8 @@
 import React, {useEffect, useState} from 'react';
-import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import apiClient from "@/lib/axios.ts";
+import {useOutletContext} from "react-router-dom";
+import type {LayoutContextType} from "../../../interface/layout.ts";
 
 interface User {
     id: number;
@@ -80,12 +83,15 @@ export default function BwmSetting() {
     // Helper untuk preview
     const getKriteriaName = (id: string) => kriterias.find(k => String(k.id) === id)?.nama;
 
+    const {setHeader} = useOutletContext<LayoutContextType>();
+    useEffect(() => {
+        setHeader(
+            <h2 className="font-semibold text-xl text-gray-800">Konfigurasi BWM (Hasil FGD)</h2>
+        );
+    }, []);
+
     return (
-        <AuthenticatedLayout
-            user={user}
-            header={<h2 className="font-semibold text-xl text-gray-800">Konfigurasi BWM (Hasil FGD)</h2>}
-        >
-            <div className="py-12">
+        <div className="py-12">
                 <div className="max-w-4xl mx-auto sm:px-6 lg:px-8">
 
                     {/* Flash Message Simulation */}
@@ -196,6 +202,5 @@ export default function BwmSetting() {
 
                 </div>
             </div>
-        </AuthenticatedLayout>
     );
 }

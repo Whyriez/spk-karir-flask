@@ -1,215 +1,386 @@
-import React, {useEffect, useState} from 'react';
-import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
-import PrimaryButton from '../../../components/PrimaryButton';
-import SecondaryButton from '../../../components/SecondaryButton';
-import Modal from '../../../components/Modal';
-import InputLabel from '../../../components/InputLabel';
-import TextInput from '../../../components/TextInput';
-import apiClient from "../../../lib/axios.ts";
+import React, {useEffect, useState, FormEvent} from 'react';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Modal from '@/components/Modal';
+import SecondaryButton from '@/components/SecondaryButton';
+import PrimaryButton from '@/components/PrimaryButton';
+import apiClient from '@/lib/axios';
+import {useOutletContext} from "react-router-dom";
+import type {LayoutContextType} from "../../../interface/layout.ts";
+
+// Tipe Data
+interface MonitoringItem {
+    id: number;
+    user_id?: number;
+    name?: string; // Fallback jika user relation null
+    nisn?: string;
+    // Struktur data bisa variatif dari backend, kita handle flexible
+    user?: {
+        name: string;
+        nisn: string;
+        jurusan?: { nama_jurusan: string };
+    };
+    jurusan?: { nama_jurusan: string }; // Fallback
+    kelas?: string;
+    tingkat_kelas?: string;
+    // Data Hasil
+    keputusan_terbaik?: string;
+    skor_studi?: number;
+    skor_kerja?: number;
+    skor_wirausaha?: number;
+    catatan_guru_bk?: string;
+}
+
+interface Periode {
+    id: number;
+    nama_periode: string;
+    is_active: boolean;
+}
+
+interface PaginationData {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+    data: MonitoringItem[];
+    links?: { url: string | null; label: string; active: boolean }[];
+}
 
 export default function MonitoringIndex() {
-    const [data, setData] = useState<any[]>([]);
+    // --- STATE ---
     const [loading, setLoading] = useState(true);
+    const [results, setResults] = useState<PaginationData | null>(null);
+    const [periodes, setPeriodes] = useState<Periode[]>([]);
 
-    // Filters
-    const [search, setSearch] = useState('');
-    const [filterKelas, setFilterKelas] = useState('');
+    // Filter State
+    const [searchTerm, setSearchTerm] = useState('');
+    const [selectedPeriode, setSelectedPeriode] = useState('');
+    const [selectedStatus, setSelectedStatus] = useState('sudah'); // Default 'sudah' mirip Laravel
 
-    // Modal Catatan
-    const [showModal, setShowModal] = useState(false);
-    const [selectedHasil, setSelectedHasil] = useState<any>(null);
-    const [catatan, setCatatan] = useState('');
+    // Modal State
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [selectedItem, setSelectedItem] = useState<MonitoringItem | null>(null);
+    const [catatanInput, setCatatanInput] = useState('');
     const [processing, setProcessing] = useState(false);
 
-    const fetchData = async () => {
-        setLoading(true)
+    // --- FETCH DATA ---
+    const fetchData = async (url: string | null = '/monitoring') => {
+        setLoading(true);
         try {
-            const res = await apiClient.get('/monitoring', {
+            // endpoint backend harus menghandle param: search, periode_id, status
+            const response = await apiClient.get(url || '/monitoring', {
                 params: {
-                    search: search || undefined,
-                    kelas: filterKelas || undefined
+                    search: searchTerm,
+                    periode_id: selectedPeriode,
+                    status: selectedStatus,
+                    page: 1 // Reset ke page 1 jika filter berubah (logic handled by backend usually)
                 }
-            })
+            });
 
-            setData(res.data.data)   // backend Flask: { data: [...] }
-        } catch (err) {
-            console.error(err)
+            // Asumsi backend mengembalikan struktur: { results: { data: [], ... }, periodes: [] }
+            // Sesuaikan dengan response Flask Anda
+            setResults(response.data.results);
+            setPeriodes(response.data.periodes || []);
+        } catch (error) {
+            console.error("Error fetching monitoring data:", error);
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
-    }
+    };
 
-
-    // Debounce search / effect filter
+    // Initial Load & Debounce Search
     useEffect(() => {
         const timer = setTimeout(() => {
             fetchData();
         }, 300);
         return () => clearTimeout(timer);
-    }, [search, filterKelas]);
+    }, [searchTerm, selectedPeriode, selectedStatus]);
 
-    const openModal = (item: any) => {
-        if (!item.hasil) return alert("Siswa ini belum memiliki hasil penilaian.");
-        setSelectedHasil(item.hasil);
-        setCatatan(item.hasil.catatan || '');
-        setShowModal(true);
+    // --- HANDLERS ---
+
+    // Pagination Handler
+    const handlePageChange = (url: string | null) => {
+        if (!url) return;
+        // Kita perlu parse URL untuk ambil query param page, atau backend support full url
+        // Karena apiClient punya baseURL, kita ambil path-nya saja atau kirim param page manual
+        const targetUrl = new URL(url).pathname + new URL(url).search;
+        fetchData(targetUrl);
     };
 
-    const handleSaveCatatan = async (e: React.FormEvent) => {
+    // Modal Handlers
+    const openModal = (item: MonitoringItem) => {
+        setSelectedItem(item);
+        setCatatanInput(item.catatan_guru_bk || '');
+        setIsModalOpen(true);
+    };
+
+    const submitCatatan = async (e: FormEvent) => {
         e.preventDefault();
+        if (!selectedItem) return;
+
         setProcessing(true);
-        const token = localStorage.getItem('token');
+        try {
+            await apiClient.post(`/monitoring/${selectedItem.id}/catatan`, {
+                catatan_guru_bk: catatanInput
+            });
 
-        const res = await fetch('http://localhost:5000/api/monitoring/catatan', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-                hasil_id: selectedHasil.id,
-                catatan: catatan
-            })
-        });
-
-        if (res.ok) {
-            alert('Catatan tersimpan');
-            setShowModal(false);
-            fetchData(); // Refresh list
-        } else {
-            alert('Gagal menyimpan');
+            setIsModalOpen(false);
+            fetchData(); // Refresh data table
+        } catch (error) {
+            console.error("Gagal menyimpan catatan", error);
+            alert("Terjadi kesalahan saat menyimpan catatan.");
+        } finally {
+            setProcessing(false);
         }
-        setProcessing(false);
     };
+
+    // Helper untuk Nilai Tertinggi
+    const getNilaiOptima = (item: MonitoringItem) => {
+        return Math.max(item.skor_studi || 0, item.skor_kerja || 0, item.skor_wirausaha || 0).toFixed(4);
+    };
+
+    const {setHeader} = useOutletContext<LayoutContextType>();
+    useEffect(() => {
+        setHeader(
+            <h2 className="font-semibold text-xl text-gray-800 leading-tight">Monitoring Siswa</h2>
+        );
+    }, []);
 
     return (
-        <AuthenticatedLayout header={<h2 className="font-semibold text-xl text-gray-800">Monitoring Siswa</h2>}>
+        <div
+        >
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                    <div className="bg-white shadow-sm sm:rounded-lg p-6">
+                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
 
-                        {/* FILTER BAR */}
-                        <div className="flex flex-col md:flex-row gap-4 mb-6 justify-between">
-                            <div className="flex gap-4">
-                                <select
-                                    className="border-gray-300 rounded-md shadow-sm"
-                                    value={filterKelas}
-                                    onChange={(e) => setFilterKelas(e.target.value)}
-                                >
-                                    <option value="">Semua Kelas</option>
-                                    <option value="10">Kelas 10</option>
-                                    <option value="11">Kelas 11</option>
-                                    <option value="12">Kelas 12</option>
-                                </select>
-                            </div>
-                            <div className="w-full md:w-1/3">
-                                <TextInput
+                        {/* --- FILTER SECTION (PERSIS LARAVEL) --- */}
+                        <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
+                            {/* Search */}
+                            <div className="flex gap-2 w-full md:w-1/3">
+                                <input
+                                    type="text"
                                     placeholder="Cari Nama / NISN..."
-                                    className="w-full"
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
                                 />
+                            </div>
+
+                            {/* Dropdowns */}
+                            <div className="flex gap-2 w-full md:w-2/3 justify-end">
+                                {/* Filter Status */}
+                                <select
+                                    className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm text-sm"
+                                    value={selectedStatus}
+                                    onChange={(e) => setSelectedStatus(e.target.value)}
+                                >
+                                    <option value="sudah">Sudah Mengisi</option>
+                                    <option value="belum">Belum Mengisi</option>
+                                </select>
+
+                                {/* Filter Periode */}
+                                <select
+                                    className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm text-sm"
+                                    value={selectedPeriode}
+                                    onChange={(e) => setSelectedPeriode(e.target.value)}
+                                >
+                                    <option value="">Semua Periode</option>
+                                    {periodes.map((p) => (
+                                        <option key={p.id} value={p.id}>
+                                            {p.nama_periode} {p.is_active ? '(Aktif)' : ''}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
 
-                        {/* TABLE */}
+                        {/* --- TABLE SECTION --- */}
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Siswa</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kelas/Jurusan</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Hasil</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Siswa</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kelas
+                                        / Jurusan
+                                    </th>
+
+                                    {/* CONDITIONAL COLUMNS */}
+                                    {selectedStatus === 'sudah' ? (
+                                        <>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Keputusan</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nilai
+                                                Optima
+                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Catatan
+                                                BK
+                                            </th>
+                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
+                                        </>
+                                    ) : (
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    )}
                                 </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
                                 {loading ? (
                                     <tr>
-                                        <td colSpan={5} className="p-4 text-center">Loading...</td>
+                                        <td colSpan={7} className="px-6 py-8 text-center text-gray-500">Memuat data...
+                                        </td>
                                     </tr>
-                                ) : data.length === 0 ? (
+                                ) : !results?.data || results.data.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="p-4 text-center">Tidak ada data.</td>
-                                    </tr>
-                                ) : data.map((item) => (
-                                    <tr key={item.id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4">
-                                            <div className="font-medium text-gray-900">{item.name}</div>
-                                            <div className="text-xs text-gray-500">{item.nisn}</div>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-600">
-                                            {item.kelas} - {item.jurusan}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                                <span
-                                                    className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                                                        item.status === 'Sudah Dinilai' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                                                    }`}>
-                                                    {item.status}
-                                                </span>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm">
-                                            {item.hasil ? (
-                                                <div>
-                                                    <div
-                                                        className="font-bold text-indigo-700">{item.hasil.keputusan}</div>
-                                                    <div
-                                                        className="text-xs text-gray-500">Skor: {item.hasil.skor_tertinggi.toFixed(3)}</div>
-                                                    {item.hasil.catatan && (
-                                                        <div
-                                                            className="mt-1 text-xs bg-yellow-50 p-1 rounded border border-yellow-200 text-yellow-700 truncate max-w-xs">
-                                                            📝 {item.hasil.catatan}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ) : '-'}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            {item.hasil && (
-                                                <button
-                                                    onClick={() => openModal(item)}
-                                                    className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
-                                                >
-                                                    Beri Catatan
-                                                </button>
-                                            )}
+                                        <td colSpan={selectedStatus === 'sudah' ? 7 : 4}
+                                            className="px-6 py-8 text-center text-gray-500 italic">
+                                            Tidak ada data siswa ditemukan.
                                         </td>
                                     </tr>
-                                ))}
+                                ) : (
+                                    results.data.map((item, index) => {
+                                        // Normalisasi Data (Safe Access)
+                                        const siswaName = item.user?.name || item.name || '-';
+                                        const siswaNisn = item.user?.nisn || item.nisn || '-';
+                                        const jurusanName = item.user?.jurusan?.nama_jurusan || item.jurusan?.nama_jurusan || '-';
+                                        const kelas = item.tingkat_kelas || item.kelas || '-';
+                                        const rowNumber = results.current_page ? (results.current_page - 1) * results.per_page + index + 1 : index + 1;
+
+                                        return (
+                                            <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {rowNumber}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm font-medium text-gray-900">{siswaName}</div>
+                                                    <div className="text-sm text-gray-500">{siswaNisn}</div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {kelas} - {jurusanName}
+                                                </td>
+
+                                                {/* KONTEN KONDISIONAL */}
+                                                {selectedStatus === 'sudah' ? (
+                                                    <>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <BadgeKeputusan label={item.keputusan_terbaik || '-'}/>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-600">
+                                                            {getNilaiOptima(item)}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                                                            {item.catatan_guru_bk ? (
+                                                                <span
+                                                                    title={item.catatan_guru_bk}>{item.catatan_guru_bk}</span>
+                                                            ) : (
+                                                                <span
+                                                                    className="italic text-gray-300">Belum ada catatan</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                            <button
+                                                                onClick={() => openModal(item)}
+                                                                className="text-indigo-600 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-md transition-colors"
+                                                            >
+                                                                {item.catatan_guru_bk ? 'Edit Catatan' : '+ Catatan'}
+                                                            </button>
+                                                        </td>
+                                                    </>
+                                                ) : (
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                            <span
+                                                                className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 border border-red-200">
+                                                                Belum Mengisi
+                                                            </span>
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        );
+                                    })
+                                )}
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* --- PAGINATION --- */}
+                        <div className="mt-4 flex justify-between items-center">
+                            {results && (
+                                <div className="text-sm text-gray-500">
+                                    Total: {results.total} Data
+                                </div>
+                            )}
+
+                            {results?.links && results.links.length > 3 && (
+                                <div className="flex gap-1">
+                                    {results.links.map((link, k) => {
+                                        // Skip jika url null (biasanya 'Previous' di halaman 1)
+                                        if (!link.url && !link.label) return null;
+
+                                        return (
+                                            <button
+                                                key={k}
+                                                onClick={() => handlePageChange(link.url)}
+                                                disabled={!link.url}
+                                                className={`px-3 py-1 text-sm rounded border ${
+                                                    link.active
+                                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                                                } ${!link.url && 'opacity-50 cursor-not-allowed'}`}
+                                                dangerouslySetInnerHTML={{__html: link.label}}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+
                     </div>
                 </div>
             </div>
 
-            {/* MODAL CATATAN */}
-            <Modal show={showModal} onClose={() => setShowModal(false)}>
-                <form onSubmit={handleSaveCatatan} className="p-6">
-                    <h2 className="text-lg font-medium text-gray-900 mb-4">Catatan Guru BK</h2>
-                    <p className="text-sm text-gray-600 mb-4">
-                        Berikan masukan atau rekomendasi manual untuk siswa ini berdasarkan hasil sistem.
-                    </p>
-
-                    <div className="mb-4">
-                        <InputLabel value="Isi Catatan"/>
+            {/* --- MODAL CATATAN --- */}
+            <Modal show={isModalOpen} onClose={() => setIsModalOpen(false)}>
+                <div className="p-6">
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">
+                        Catatan untuk {selectedItem?.user?.name || selectedItem?.name}
+                    </h3>
+                    <form onSubmit={submitCatatan}>
                         <textarea
-                            className="w-full mt-1 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            className="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
                             rows={5}
-                            value={catatan}
-                            onChange={(e) => setCatatan(e.target.value)}
-                            placeholder="Contoh: Disarankan mengambil jurusan Teknik Informatika karena nilai matematika tinggi..."
+                            placeholder="Tuliskan catatan konseling, validasi hasil, atau saran tambahan..."
+                            value={catatanInput}
+                            onChange={(e) => setCatatanInput(e.target.value)}
+                            required
                         ></textarea>
-                    </div>
 
-                    <div className="flex justify-end gap-2">
-                        <SecondaryButton type="button" onClick={() => setShowModal(false)}>Batal</SecondaryButton>
-                        <PrimaryButton disabled={processing}>Simpan Catatan</PrimaryButton>
-                    </div>
-                </form>
+                        <div className="mt-6 flex justify-end gap-3">
+                            <SecondaryButton onClick={() => setIsModalOpen(false)}>
+                                Batal
+                            </SecondaryButton>
+                            <PrimaryButton disabled={processing}>
+                                {processing ? 'Menyimpan...' : 'Simpan Catatan'}
+                            </PrimaryButton>
+                        </div>
+                    </form>
+                </div>
             </Modal>
-        </AuthenticatedLayout>
+        </div>
+    );
+}
+
+// --- SUB COMPONENT (BADGE WARNA) ---
+function BadgeKeputusan({label}: { label: string }) {
+    let classes = "bg-gray-100 text-gray-800";
+
+    if (label === 'Melanjutkan Studi' || label.includes('Studi')) {
+        classes = "bg-indigo-100 text-indigo-800 border border-indigo-200";
+    } else if (label === 'Bekerja' || label.includes('Kerja')) {
+        classes = "bg-green-100 text-green-800 border border-green-200";
+    } else if (label === 'Wirausaha') {
+        classes = "bg-orange-100 text-orange-800 border border-orange-200";
+    }
+
+    return (
+        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${classes}`}>
+            {label}
+        </span>
     );
 }

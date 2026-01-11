@@ -109,8 +109,7 @@ class Kriteria(db.Model):
 
     # --- MISSING FIELDS ADDED ---
     tampil_di_siswa = db.Column(db.Boolean, default=True, nullable=False)
-    penanggung_jawab = db.Column(db.Enum(RoleEnum), default=RoleEnum.admin,
-                                 nullable=True)  # Biasanya 'admin' atau 'pakar'
+    penanggung_jawab = db.Column(db.String(50), default='gurubk', nullable=True)
     # ----------------------------
 
     created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())

@@ -1,5 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import AuthenticatedLayout from "../../../Layouts/AuthenticatedLayout";
+import {useOutletContext} from "react-router-dom";
+import type {LayoutContextType} from "../../../interface/layout.ts";
 
 interface User {
     id: number;
@@ -29,6 +31,13 @@ export default function BwmInput() {
     const [processing, setProcessing] = useState(false);
 
     const user: User = JSON.parse(localStorage.getItem('user') || '{}');
+
+    const {setHeader} = useOutletContext<LayoutContextType>();
+    useEffect(() => {
+        setHeader(
+            <h2 className="font-semibold text-xl text-gray-800">Input BWM (Sesuai FGD)</h2>
+        );
+    }, []);
 
     // Fetch Initial Data
     useEffect(() => {
@@ -114,11 +123,7 @@ export default function BwmInput() {
     if (!isReady) return <div className="p-10 text-center text-gray-500">Loading Context...</div>;
 
     return (
-        <AuthenticatedLayout
-            user={user}
-            header={<h2 className="font-semibold text-xl text-gray-800">Input BWM (Sesuai FGD)</h2>}
-        >
-            <div className="py-12">
+         <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
 
                     {/* INFO ROLE */}
@@ -230,6 +235,5 @@ export default function BwmInput() {
                     </form>
                 </div>
             </div>
-        </AuthenticatedLayout>
     );
 }

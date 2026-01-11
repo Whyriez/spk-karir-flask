@@ -15,6 +15,7 @@ from routes.jurusan import jurusan_bp
 from routes.alumni import alumni_bp
 from routes.monitoring import monitoring_bp
 from routes.promotion import promotion_bp
+from routes.settings import settings_bp
 
 from command import seed_db
 # Import konfigurasi dan database yang sudah kita siapkan
@@ -60,6 +61,7 @@ app.register_blueprint(jurusan_bp, url_prefix='/api/jurusan')
 app.register_blueprint(alumni_bp, url_prefix='/api/alumni')
 app.register_blueprint(monitoring_bp, url_prefix='/api/monitoring')
 app.register_blueprint(promotion_bp, url_prefix='/api/promotion')
+app.register_blueprint(settings_bp, url_prefix='/api/settings')
 
 
 

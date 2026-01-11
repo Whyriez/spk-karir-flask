@@ -6,6 +6,8 @@ import Modal from '../../../components/Modal';
 import TextInput from '../../../components/TextInput';
 import InputLabel from '../../../components/InputLabel';
 import apiClient from "../../../lib/axios.ts";
+import {useOutletContext} from "react-router-dom";
+import type {LayoutContextType} from "../../../interface/layout.ts";
 
 export default function JurusanIndex() {
     const [data, setData] = useState<any[]>([]);
@@ -65,8 +67,15 @@ export default function JurusanIndex() {
     }
 
 
+    const {setHeader} = useOutletContext<LayoutContextType>();
+    useEffect(() => {
+        setHeader(
+            <h2 className="font-semibold text-xl text-gray-800">Data Jurusan</h2>
+        );
+    }, []);
+
     return (
-        <AuthenticatedLayout header={<h2 className="font-semibold text-xl text-gray-800">Data Jurusan</h2>}>
+        <div>
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
@@ -129,6 +138,6 @@ export default function JurusanIndex() {
                     </div>
                 </form>
             </Modal>
-        </AuthenticatedLayout>
+        </div>
     );
 }

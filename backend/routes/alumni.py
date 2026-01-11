@@ -1,5 +1,6 @@
 import pandas as pd
-from flask import Blueprint, request, jsonify
+import io
+from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt
 from models import db, Alumni
 
@@ -9,13 +10,14 @@ alumni_bp = Blueprint('alumni', __name__)
 @alumni_bp.route('/', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def index():
-    # Pagination & Search
     page = request.args.get('page', 1, type=int)
     search = request.args.get('search', '')
 
     query = Alumni.query
     if search:
-        query = query.filter(Alumni.name.ilike(f'%{search}%'))
+        query = query.filter(Alumni.name.ilike(f'%{search}%') |
+                             Alumni.major.ilike(f'%{search}%') |
+                             Alumni.status.ilike(f'%{search}%'))
 
     pagination = query.order_by(Alumni.batch.desc()).paginate(page=page, per_page=10, error_out=False)
 
@@ -29,12 +31,16 @@ def index():
             'major': a.major
         })
 
+    # Format Pagination agar mirip Laravel response structure
     return jsonify({
         'data': data,
         'meta': {
-            'page': page,
+            'current_page': page,
+            'last_page': pagination.pages,
             'total': pagination.total,
-            'pages': pagination.pages
+            'per_page': 10,
+            'from': (page - 1) * 10 + 1,
+            'to': min(page * 10, pagination.total)
         }
     })
 
@@ -49,9 +55,9 @@ def store():
     try:
         new_a = Alumni(
             name=data['name'],
-            status=data['status'],  # Kuliah / Kerja / Wirausaha
-            batch=data['batch'],  # Tahun Lulus
-            major=data['major']  # Nama Jurusan (String)
+            status=data['status'],
+            batch=data['batch'],
+            major=data['major']
         )
         db.session.add(new_a)
         db.session.commit()
@@ -60,7 +66,7 @@ def store():
         return jsonify({'msg': str(e)}), 400
 
 
-@alumni_bp.route('/<int:id>', methods=['PUT'])
+@alumni_bp.route('/<int:id>', methods=['PUT'], strict_slashes=False)
 @jwt_required()
 def update(id):
     claims = get_jwt()
@@ -78,7 +84,7 @@ def update(id):
     return jsonify({'msg': 'Data alumni diperbarui'}), 200
 
 
-@alumni_bp.route('/<int:id>', methods=['DELETE'])
+@alumni_bp.route('/<int:id>', methods=['DELETE'], strict_slashes=False)
 @jwt_required()
 def destroy(id):
     claims = get_jwt()
@@ -90,29 +96,98 @@ def destroy(id):
     return jsonify({'msg': 'Data alumni dihapus'}), 200
 
 
-@alumni_bp.route('/import', methods=['POST'])
+# --- FITUR BARU: BULK DELETE ---
+@alumni_bp.route('/bulk-destroy', methods=['POST'], strict_slashes=False)
+@jwt_required()
+def bulk_destroy():
+    claims = get_jwt()
+    if claims.get('role') != 'admin': return jsonify({'msg': 'Akses ditolak'}), 403
+
+    data = request.get_json()
+    ids = data.get('ids', [])
+
+    if not ids:
+        return jsonify({'msg': 'Tidak ada data dipilih'}), 400
+
+    try:
+        # Hapus banyak data sekaligus
+        Alumni.query.filter(Alumni.id.in_(ids)).delete(synchronize_session=False)
+        db.session.commit()
+        return jsonify({'msg': f'{len(ids)} data alumni berhasil dihapus'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'msg': str(e)}), 500
+
+
+# --- FITUR BARU: PREVIEW IMPORT ---
+@alumni_bp.route('/preview', methods=['POST'], strict_slashes=False)
+@jwt_required()
+def preview_import():
+    if 'file' not in request.files:
+        return jsonify({"msg": "No file uploaded"}), 400
+
+    file = request.files['file']
+    try:
+        df = pd.read_excel(file)
+        # Convert NaN to None/Empty string agar JSON valid
+        df = df.where(pd.notnull(df), None)
+
+        # Mapping kolom Excel ke nama field frontend
+        # Asumsi header excel: 'Nama', 'Status', 'Tahun Lulus', 'Jurusan'
+        preview_data = []
+        for index, row in df.iterrows():
+            preview_data.append({
+                'nama': row.get('Nama', ''),
+                'status': row.get('Status', ''),
+                'angkatan': row.get('Tahun Lulus', ''),
+                'jurusan': row.get('Jurusan', '')
+            })
+
+        return jsonify(preview_data), 200
+    except Exception as e:
+        return jsonify({"msg": f"Gagal membaca file: {str(e)}"}), 400
+
+
+# --- FITUR BARU: IMPORT FINAL ---
+@alumni_bp.route('/import', methods=['POST'], strict_slashes=False)
+@jwt_required()
 def import_alumni():
     if 'file' not in request.files:
         return jsonify({"msg": "No file uploaded"}), 400
 
     file = request.files['file']
-
     try:
-        # Baca Excel menggunakan Pandas
         df = pd.read_excel(file)
-
-        # Loop dan simpan ke DB
+        count = 0
         for index, row in df.iterrows():
             new_alumni = Alumni(
-                name=row['Nama'],
-                status=row['Status'],  # Pastikan nama kolom di Excel sesuai
-                batch=row['Tahun Lulus'],
-                major=row['Jurusan']
+                name=row.get('Nama'),
+                status=row.get('Status'),
+                batch=row.get('Tahun Lulus'),
+                major=row.get('Jurusan')
             )
             db.session.add(new_alumni)
+            count += 1
 
         db.session.commit()
-        return jsonify({"msg": "Data imported successfully"}), 200
-
+        return jsonify({"msg": f"{count} Data berhasil diimport"}), 200
     except Exception as e:
         return jsonify({"msg": str(e)}), 500
+
+
+# --- FITUR BARU: DOWNLOAD TEMPLATE ---
+@alumni_bp.route('/template', methods=['GET'], strict_slashes=False)
+def download_template():
+    # Buat file excel sederhana di memory
+    df = pd.DataFrame(columns=['Nama', 'Status', 'Tahun Lulus', 'Jurusan'])
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Sheet1')
+    output.seek(0)
+
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='template_alumni.xlsx'
+    )

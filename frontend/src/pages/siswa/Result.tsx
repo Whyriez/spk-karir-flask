@@ -19,7 +19,7 @@ import {
     Filler
 } from 'chart.js';
 
-// Registrasi komponen ChartJS untuk mendukung grafik garis dan area fill [cite: 102]
+// Registrasi komponen ChartJS
 ChartJS.register(
     CategoryScale,
     LinearScale,
@@ -31,25 +31,35 @@ ChartJS.register(
     Filler
 );
 
+// Tipe Data untuk Riwayat (Snapshot)
+interface SnapshotItem {
+    kriteria_kode: string;
+    kriteria_nama: string;
+    pertanyaan_teks: string;
+    jawaban_nilai: number;
+}
+
 export default function ResultSiswa() {
     const [data, setData] = useState<any>(null);
     const [chartData, setChartData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isAlumniModalOpen, setIsAlumniModalOpen] = useState(false);
+
+    // State untuk Toggle Riwayat Jawaban
+    const [showHistory, setShowHistory] = useState(false);
+
     const [searchParams] = useSearchParams();
     const historyId = searchParams.get('id');
 
-    // 1. Ambil Data Hasil MOORA dan Data Monitoring untuk Grafik
+    // 1. Ambil Data Hasil MOORA dan Data Monitoring
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
             try {
-                // Fetch hasil MOORA periode aktif atau berdasarkan riwayat ID [cite: 101]
                 const resultUrl = historyId ? `/moora/result?id=${historyId}` : '/moora/result';
                 const resResult = await apiClient.get(resultUrl);
                 setData(resResult.data);
 
-                // Fetch data longitudinal untuk Progress Chart (Kelas 10, 11, 12)
                 const resChart = await apiClient.get('/monitoring/chart-data');
                 setChartData(resChart.data);
             } catch (err) {
@@ -60,6 +70,23 @@ export default function ResultSiswa() {
         };
         fetchData();
     }, [historyId]);
+
+    // Helper: Grouping Riwayat Jawaban berdasarkan Kriteria
+    const groupHistoryByKriteria = (history: SnapshotItem[]) => {
+        if (!history || !Array.isArray(history)) return {};
+        const grouped: Record<string, SnapshotItem[]> = {};
+
+        history.forEach(item => {
+            // Grouping key: "C1 - Minat"
+            const key = `${item.kriteria_kode} - ${item.kriteria_nama}`;
+            if (!grouped[key]) {
+                grouped[key] = [];
+            }
+            grouped[key].push(item);
+        });
+
+        return grouped;
+    };
 
     // 2. Loading State
     if (loading) {
@@ -101,7 +128,11 @@ export default function ResultSiswa() {
     const alumni_relevan = alumni || [];
     const keputusan = hasil.keputusan || '';
 
-    // 4. Tema Visual Dinamis Berdasarkan Keputusan [cite: 95]
+    // Ambil history dari response backend
+    const riwayatJawaban = hasil.riwayat_jawaban || [];
+    const groupedHistory = groupHistoryByKriteria(riwayatJawaban);
+
+    // 4. Tema Visual Dinamis
     let themeClass = 'border-gray-500 text-gray-700';
     let bgClass = 'bg-gray-50';
     let description = '';
@@ -156,7 +187,7 @@ export default function ResultSiswa() {
                             <h3 className="text-lg font-bold text-gray-800">{periode}</h3>
                             <p className="text-sm text-gray-500 italic">Tingkat Kelas: {hasil.tingkat_kelas || '-'}</p>
                         </div>
-                        <Link to="/dashboard" className="text-sm text-gray-500 hover:text-gray-800 underline font-medium">Lihat Riwayat</Link>
+                        <Link to="/dashboard" className="text-sm text-gray-500 hover:text-gray-800 underline font-medium">Lihat Riwayat Lainnya</Link>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -186,6 +217,60 @@ export default function ResultSiswa() {
                                         <div className="flex items-center justify-center h-full text-gray-400 italic">Data histori belum cukup untuk menampilkan tren.</div>
                                     )}
                                 </div>
+                            </div>
+
+                            {/* BAGIAN BARU: RIWAYAT JAWABAN (DETAIL SNAPSHOT) */}
+                            <div className="bg-white shadow-sm rounded-xl border border-gray-100 overflow-hidden">
+                                <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                        </svg>
+                                        <h3 className="font-bold text-gray-800">Detail Jawaban Anda</h3>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowHistory(!showHistory)}
+                                        className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1 rounded-full transition"
+                                    >
+                                        {showHistory ? "Sembunyikan" : "Tampilkan Detail"}
+                                    </button>
+                                </div>
+
+                                {showHistory && (
+                                    <div className="p-6 bg-gray-50/50">
+                                        {Object.keys(groupedHistory).length > 0 ? (
+                                            <div className="space-y-6">
+                                                {Object.entries(groupedHistory).map(([kriteriaKey, items]) => (
+                                                    <div key={kriteriaKey} className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                                                        <h4 className="font-bold text-sm text-indigo-700 border-b border-gray-100 pb-2 mb-3">
+                                                            Kriteria: {kriteriaKey}
+                                                        </h4>
+                                                        <div className="grid gap-3">
+                                                            {items.map((item, idx) => (
+                                                                <div key={idx} className="flex justify-between items-start text-sm group">
+                                                                    <div className="pr-4 text-gray-600">
+                                                                        <span className="font-mono text-gray-400 text-xs mr-2">{idx + 1}.</span>
+                                                                        {item.pertanyaan_teks}
+                                                                    </div>
+                                                                    <div className="flex-shrink-0">
+                                                                        <span className="inline-flex items-center justify-center px-2 py-1 rounded font-bold text-xs bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                                                            Nilai: {item.jawaban_nilai}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-8 text-gray-400 italic">
+                                                <p>Tidak ada data detail riwayat jawaban untuk sesi ini.</p>
+                                                <p className="text-xs mt-1">Data detail mungkin belum tersimpan pada versi sistem sebelumnya.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* JEJAK ALUMNI RELEVAN  */}

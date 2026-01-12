@@ -172,7 +172,8 @@ def get_result():
             'skor': {'studi': hasil.skor_studi, 'kerja': hasil.skor_kerja, 'wirausaha': hasil.skor_wirausaha},
             'catatan': hasil.catatan_guru_bk,
             'created_at': hasil.created_at,
-            'tingkat_kelas': hasil.tingkat_kelas
+            'tingkat_kelas': hasil.tingkat_kelas,
+            'riwayat_jawaban': hasil.detail_snapshot or []
         },
         'alumni': alumni_list,
         'periode': periode_nama

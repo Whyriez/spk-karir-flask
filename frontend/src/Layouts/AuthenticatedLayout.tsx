@@ -167,6 +167,7 @@ export default function AuthenticatedLayout() {
                         items: [
                             {label: "Monitoring Siswa", to: "/admin/monitoring"},
                             {label: "Kenaikan Kelas", to: "/admin/promotion"},
+                            {label: "Data Siswa", to: "/admin/siswa"},
                             {label: "Data Alumni", to: "/admin/alumni"},
                         ]
                     },

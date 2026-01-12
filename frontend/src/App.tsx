@@ -24,6 +24,7 @@ import BwmSetting from "./pages/admin/bwm/Setting.tsx";
 import Welcome from "./pages/Welcome.tsx";
 import AuthenticatedLayout from "./Layouts/AuthenticatedLayout.tsx";
 import NilaiStaticIndex from "./pages/admin/nilai_static/Index.tsx";
+import AdminSiswaIndex from "./pages/admin/siswa";
 
 // Protected Route Component
 const ProtectedRoute = ({children, roles}: { children: JSX.Element, roles?: string[] }) => {
@@ -68,7 +69,8 @@ function App() {
                         <Route path="/admin/promotion" element={<ProtectedRoute roles={['admin']}><PromotionIndex /></ProtectedRoute>} />
                         <Route path="/admin/settings" element={<ProtectedRoute roles={['admin']}><Settings /></ProtectedRoute>} />
                         <Route path="/admin/bwm/setting" element={<ProtectedRoute roles={['admin']}><BwmSetting /></ProtectedRoute>} />
-                        <Route path="/admin/nilai-static" element={<NilaiStaticIndex />} />
+                        <Route path="/admin/nilai-static" element={<ProtectedRoute roles={['admin']}><NilaiStaticIndex /></ProtectedRoute>} />
+                        <Route path="/admin/siswa" element={<ProtectedRoute roles={['admin']}><AdminSiswaIndex /></ProtectedRoute>} />
 
                         {/* PAKAR ROUTES */}
                         <Route path="/pakar/bwm" element={<ProtectedRoute roles={['pakar']}><BwmInput /></ProtectedRoute>} />

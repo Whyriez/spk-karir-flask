@@ -1,13 +1,10 @@
 import React, {useEffect, useState} from 'react';
-import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
 import PrimaryButton from '../../../components/PrimaryButton';
 import SecondaryButton from '../../../components/SecondaryButton';
 import Modal from '../../../components/Modal';
 import TextInput from '../../../components/TextInput';
 import InputLabel from '../../../components/InputLabel';
 import apiClient from "../../../lib/axios.ts";
-import {useOutletContext} from "react-router-dom";
-import type {LayoutContextType} from "../../../interface/layout.ts";
 import Header from "../../../components/Header.tsx";
 
 export default function PeriodeIndex() {

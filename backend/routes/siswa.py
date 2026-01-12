@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from models import db, Kriteria, NilaiSiswa, User, Jurusan
+from models import db, Kriteria, NilaiSiswa, User, Jurusan, Pertanyaan, HasilRekomendasi, Periode
 import json
 
 siswa_bp = Blueprint('siswa', __name__)
@@ -20,8 +20,13 @@ def get_form():
 
     # Ambil nilai lama jika ada (untuk edit)
     nilai_lama = NilaiSiswa.query.filter_by(siswa_id=current_user_id).all()
-    nilai_dict = {n.kriteria_id: n.nilai_input for n in nilai_lama}
+    # Note: Logic ambil nilai lama mungkin perlu disesuaikan jika ingin per-pertanyaan,
+    # tapi untuk sekarang kita biarkan kosong atau load logic agregat jika perlu.
+    # Namun, karena frontend values sekarang berbasis ID Pertanyaan,
+    # idealnya kita load history jawaban per pertanyaan (jika fitur save draft ada).
+    # Untuk simpelnya, kita return form kosong/default dulu atau nilai agregat.
 
+    # Kita siapkan data kriteria
     data = []
     for k in kriterias:
         # Parsing JSON opsi_pilihan jika berupa string (safety check)
@@ -32,15 +37,27 @@ def get_form():
             except:
                 opsi = []
 
+        # Ambil daftar pertanyaan aktif
+        list_pertanyaan = []
+        if hasattr(k, 'list_pertanyaan'):
+            for p in k.list_pertanyaan:
+                if p.is_active:
+                    list_pertanyaan.append({
+                        'id': p.id,
+                        'teks': p.teks
+                    })
+
         data.append({
             'id': k.id,
             'kode': k.kode,
             'nama': k.nama,
-            'pertanyaan': k.pertanyaan,
-            'tipe_input': k.tipe_input.value,
-            'kategori': k.kategori.value,
-            'opsi_pilihan': opsi,  # <--- PENTING: Kirim list opsi
-            'value': nilai_dict.get(k.id, '')
+            # 'pertanyaan': k.pertanyaan,  <-- HAPUS INI (Penyebab Error)
+            'list_pertanyaan': list_pertanyaan,  # <-- GANTI DENGAN INI
+            'tipe_input': k.tipe_input.value if hasattr(k.tipe_input, 'value') else str(k.tipe_input),
+            'atribut': k.atribut.value if hasattr(k.atribut, 'value') else str(k.atribut),
+            'kategori': k.kategori.value if hasattr(k.kategori, 'value') else str(k.kategori),
+            'opsi_pilihan': opsi,
+            'value': None  # Placeholder
         })
 
     return jsonify({'data': data})
@@ -54,34 +71,61 @@ def save_nilai():
     data = request.get_json()
 
     # Data berupa dict: {'1': 85, '2': 5, ...} (Key=KriteriaID, Val=Nilai)
-    input_values = data.get('values', {})
+    values = data.get('values', {})
 
-    if not input_values:
-        return jsonify({'msg': 'Tidak ada data yang dikirim'}), 400
+    temp_scores = {}
+    snapshot_data = []
+
+    # if not input_values:
+    #     return jsonify({'msg': 'Tidak ada data yang dikirim'}), 400
 
     try:
         # Kita gunakan strategi "Delete All Insert New" atau "Update or Create"
         # Agar simpel dan aman, kita loop update/insert
 
-        for k_id, val in input_values.items():
-            # Pastikan val tidak kosong
-            if val is None or val == '':
+        for key, val in values.items():
+            # Frontend disarankan mengirim ID pertanyaan sebagai key, misal "p_12" atau angka 12
+            # Jika key adalah ID Pertanyaan (int)
+            try:
+                p_id = int(key)
+                pertanyaan = Pertanyaan.query.get(p_id)
+                if pertanyaan:
+                    k_id = pertanyaan.kriteria_id
+
+                    # Masukkan ke temp list untuk dirata-rata
+                    if k_id not in temp_scores:
+                        temp_scores[k_id] = []
+                    temp_scores[k_id].append(float(val))
+
+                    # Siapkan Snapshot Data (PENTING UNTUK RIWAYAT)
+                    snapshot_data.append({
+                        'kriteria_kode': pertanyaan.kriteria.kode,
+                        'kriteria_nama': pertanyaan.kriteria.nama,
+                        'pertanyaan_teks': pertanyaan.teks,
+                        'jawaban_nilai': val
+                    })
+            except ValueError:
                 continue
 
-            nilai_float = float(val)
+        for k_id, scores in temp_scores.items():
+            avg_score = sum(scores) / len(scores)
 
-            # Cek apakah sudah ada
-            existing = NilaiSiswa.query.filter_by(siswa_id=user_id, kriteria_id=k_id).first()
+            nilai_obj = NilaiSiswa.query.filter_by(siswa_id=user_id, kriteria_id=k_id).first()
+            if not nilai_obj:
+                nilai_obj = NilaiSiswa(siswa_id=user_id, kriteria_id=k_id)
+                db.session.add(nilai_obj)
 
-            if existing:
-                existing.nilai_input = nilai_float
-            else:
-                new_nilai = NilaiSiswa(
-                    siswa_id=user_id,
-                    kriteria_id=k_id,
-                    nilai_input=nilai_float
-                )
-                db.session.add(new_nilai)
+            nilai_obj.nilai_input = avg_score
+
+        periode = Periode.query.filter_by(is_active=True).first()
+        if periode:
+            hasil = HasilRekomendasi.query.filter_by(siswa_id=user_id, periode_id=periode.id).first()
+            if not hasil:
+                hasil = HasilRekomendasi(siswa_id=user_id, periode_id=periode.id)
+                db.session.add(hasil)
+
+            # INI KUNCINYA: Simpan JSON lengkap pertanyaan & jawaban saat ini
+            hasil.detail_snapshot = snapshot_data
 
         db.session.commit()
         return jsonify({'msg': 'Data berhasil disimpan!'}), 200

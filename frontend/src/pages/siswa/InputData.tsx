@@ -4,11 +4,16 @@ import apiClient from '@/lib/axios';
 import Header from "../../components/Header.tsx";
 
 // Tipe Data
+interface PertanyaanItem {
+    id: number;
+    teks: string;
+}
+
 interface KriteriaItem {
     id: number;
     kode: string;
     nama: string;
-    pertanyaan?: string;
+    list_pertanyaan: PertanyaanItem[];
     tipe_input: 'number' | 'select' | 'likert';
     kategori: string;
     opsi_pilihan?: { val: string | number; label: string }[];
@@ -31,13 +36,6 @@ export default function InputDataSiswa() {
                 const data = response.data.data;
 
                 setKriterias(data);
-
-                // Inisialisasi value
-                const initialValues: Record<string, any> = {};
-                data.forEach((k: KriteriaItem) => {
-                    initialValues[k.id] = k.value !== null && k.value !== undefined ? k.value : '';
-                });
-                setValues(initialValues);
             } catch (error) {
                 console.error("Gagal memuat form:", error);
             } finally {
@@ -53,8 +51,8 @@ export default function InputDataSiswa() {
     const listKuesioner = kriterias.filter(k => k.kategori === 'kuesioner');
 
     // 3. HANDLERS
-    const handleChange = (kriteriaId: number, value: string | number) => {
-        setValues(prev => ({...prev, [kriteriaId]: value}));
+    const handleChange = (pertanyaanId: number, value: string | number) => {
+        setValues(prev => ({...prev, [pertanyaanId]: value}));
     };
 
     const submit = async (e: FormEvent) => {
@@ -74,7 +72,10 @@ export default function InputDataSiswa() {
     };
 
     // 4. RENDER INPUT FIELD
-    const renderInputField = (k: KriteriaItem) => {
+    const renderInputField = (k: KriteriaItem, p: PertanyaanItem) => {
+        const inputKey = p.id;
+        const val = values[inputKey] || '';
+
         // A. Tipe NUMBER
         if (k.tipe_input === 'number') {
             return (
@@ -83,9 +84,9 @@ export default function InputDataSiswa() {
                         type="number"
                         step="0.01"
                         className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-2 text-sm"
-                        placeholder={`Masukkan nilai ${k.nama}`}
-                        value={values[k.id]}
-                        onChange={(e) => handleChange(k.id, e.target.value)}
+                        placeholder={`Masukkan nilai...`}
+                        value={val}
+                        onChange={(e) => handleChange(inputKey, e.target.value)}
                         required
                     />
                 </div>
@@ -95,7 +96,6 @@ export default function InputDataSiswa() {
         // B. Tipe SELECT
         if (k.tipe_input === 'select') {
             let options = k.opsi_pilihan || [];
-            // Fallback parsing jika backend kirim string JSON
             if (typeof options === 'string') {
                 try {
                     options = JSON.parse(options);
@@ -107,8 +107,8 @@ export default function InputDataSiswa() {
             return (
                 <select
                     className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-2 text-sm"
-                    value={values[k.id]}
-                    onChange={(e) => handleChange(k.id, e.target.value)}
+                    value={val}
+                    onChange={(e) => handleChange(inputKey, e.target.value)}
                     required
                 >
                     <option value="">-- Pilih Opsi --</option>
@@ -125,7 +125,7 @@ export default function InputDataSiswa() {
                 {val: 1, label: 'STS'}, {val: 2, label: 'TS'},
                 {val: 3, label: 'N'}, {val: 4, label: 'S'}, {val: 5, label: 'SS'}
             ];
-            const currentValue = Number(values[k.id]);
+            const currentValue = Number(val);
 
             return (
                 <div className="grid grid-cols-5 gap-2 mt-2 md:w-3/4">
@@ -138,10 +138,10 @@ export default function InputDataSiswa() {
                         `}>
                             <input
                                 type="radio"
-                                name={`k_${k.id}`}
+                                name={`p_${inputKey}`}
                                 value={opt.val}
                                 checked={currentValue === opt.val}
-                                onChange={(e) => handleChange(k.id, e.target.value)}
+                                onChange={(e) => handleChange(inputKey, e.target.value)}
                                 className="sr-only"
                                 required
                             />
@@ -158,17 +158,7 @@ export default function InputDataSiswa() {
         return (
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                    <div
-                        className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-10 text-center text-gray-500 flex flex-col items-center justify-center min-h-[300px]">
-                        <svg className="animate-spin h-8 w-8 text-indigo-500 mb-4" xmlns="http://www.w3.org/2000/svg"
-                             fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
-                                    strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor"
-                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Memuat formulir...
-                    </div>
+                    <div className="bg-white p-10 text-center text-gray-500">Memuat formulir...</div>
                 </div>
             </div>
         );
@@ -183,7 +173,7 @@ export default function InputDataSiswa() {
                 <div className="max-w-5xl mx-auto sm:px-6 lg:px-8">
                     <form onSubmit={submit} className="space-y-8">
 
-                        {/* BAGIAN 1: Data Akademik (Dengan Info Box di Kanan) */}
+                        {/* BAGIAN 1: Data Akademik & Ekonomi (Dengan Info Box di Kanan) */}
                         {listAkademik.length > 0 && (
                             <div className="bg-white p-6 shadow-sm rounded-lg border-l-4 border-blue-500">
                                 <div className="flex flex-col md:flex-row gap-8">
@@ -192,17 +182,30 @@ export default function InputDataSiswa() {
                                         <h3 className="text-lg font-bold mb-4 text-gray-800 border-b border-gray-100 pb-2">
                                             1. Data Akademik & Ekonomi
                                         </h3>
-                                        {listAkademik.map(k => (
-                                            <div key={k.id}>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-1">
-                                                    {k.kode} - {k.nama}
-                                                </label>
-                                                {k.pertanyaan && (
-                                                    <p className="text-xs text-gray-500 mb-2 italic">"{k.pertanyaan}"</p>
-                                                )}
-                                                {renderInputField(k)}
-                                            </div>
-                                        ))}
+                                        <div className="space-y-4">
+                                            {listAkademik.map(k => (
+                                                <div key={k.id} className="border-b border-gray-50 pb-4 last:border-0">
+                                                    {/* Header Kriteria */}
+                                                    <div className="font-semibold text-gray-800 mb-2">{k.kode} - {k.nama}</div>
+
+                                                    {/* Loop Pertanyaan Akademik dengan Index */}
+                                                    {k.list_pertanyaan && k.list_pertanyaan.length > 0 ? (
+                                                        k.list_pertanyaan.map((p, index) => (
+                                                            <div key={p.id} className="mb-3">
+                                                                <label className="block text-sm text-gray-600 mb-1">
+                                                                    <span className="font-medium mr-1">{index + 1}.</span> {p.teks}
+                                                                </label>
+                                                                {renderInputField(k, p)}
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="text-red-500 text-xs italic bg-red-50 p-2 rounded">
+                                                            Error: Belum ada pertanyaan diset untuk kriteria ini.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
 
                                     {/* KOLOM KANAN: PENJELASAN (LEGEND) */}
@@ -221,35 +224,29 @@ export default function InputDataSiswa() {
                                                 <p className="mb-2 font-semibold">Keterangan Skala Penilaian:</p>
                                                 <ul className="space-y-2 pl-1">
                                                     <li className="flex items-center gap-2">
-                                                    <span
-                                                        className="bg-white border border-blue-200 px-2 py-1 rounded font-bold w-10 text-center text-blue-600">STS</span>
+                                                        <span className="bg-white border border-blue-200 px-2 py-1 rounded font-bold w-10 text-center text-blue-600">STS</span>
                                                         <span>Sangat Tidak Setuju (1)</span>
                                                     </li>
                                                     <li className="flex items-center gap-2">
-                                                    <span
-                                                        className="bg-white border border-blue-200 px-2 py-1 rounded font-bold w-10 text-center text-blue-600">TS</span>
+                                                        <span className="bg-white border border-blue-200 px-2 py-1 rounded font-bold w-10 text-center text-blue-600">TS</span>
                                                         <span>Tidak Setuju (2)</span>
                                                     </li>
                                                     <li className="flex items-center gap-2">
-                                                    <span
-                                                        className="bg-white border border-blue-200 px-2 py-1 rounded font-bold w-10 text-center text-blue-600">N</span>
+                                                        <span className="bg-white border border-blue-200 px-2 py-1 rounded font-bold w-10 text-center text-blue-600">N</span>
                                                         <span>Netral / Ragu-ragu (3)</span>
                                                     </li>
                                                     <li className="flex items-center gap-2">
-                                                    <span
-                                                        className="bg-white border border-blue-200 px-2 py-1 rounded font-bold w-10 text-center text-blue-600">S</span>
+                                                        <span className="bg-white border border-blue-200 px-2 py-1 rounded font-bold w-10 text-center text-blue-600">S</span>
                                                         <span>Setuju (4)</span>
                                                     </li>
                                                     <li className="flex items-center gap-2">
-                                                    <span
-                                                        className="bg-white border border-blue-200 px-2 py-1 rounded font-bold w-10 text-center text-blue-600">SS</span>
+                                                        <span className="bg-white border border-blue-200 px-2 py-1 rounded font-bold w-10 text-center text-blue-600">SS</span>
                                                         <span>Sangat Setuju (5)</span>
                                                     </li>
                                                 </ul>
                                             </div>
 
-                                            <div
-                                                className="text-[10px] text-blue-600 border-t border-blue-200 pt-2 italic">
+                                            <div className="text-[10px] text-blue-600 border-t border-blue-200 pt-2 italic">
                                                 *Gunakan panduan ini untuk mengisi bagian Kuesioner Minat di bawah.
                                             </div>
                                         </div>
@@ -266,31 +263,33 @@ export default function InputDataSiswa() {
                                 </h3>
                                 <div className="space-y-8">
                                     {listKuesioner.map(k => (
-                                        <div key={k.id}
-                                             className="border-b border-gray-100 pb-6 last:border-0 last:pb-0">
-                                            <label className="block text-base font-semibold text-gray-900">
+                                        <div key={k.id} className="border-b border-gray-100 pb-6 last:border-0">
+                                            <div className="font-bold text-lg text-gray-900 mb-2">
                                                 {k.kode} - {k.nama}
-                                            </label>
-                                            <p className="text-sm text-gray-600 mb-3 mt-1 italic">
-                                                "{k.pertanyaan || 'Silakan isi nilai sesuai kondisi Anda'}"
-                                            </p>
-                                            {renderInputField(k)}
+                                            </div>
+
+                                            <div className="pl-4 space-y-6">
+                                                {k.list_pertanyaan && k.list_pertanyaan.length > 0 ? (
+                                                    k.list_pertanyaan.map((p, index) => (
+                                                        <div key={p.id}>
+                                                            <p className="text-sm text-gray-700 mb-2">
+                                                                <span className="font-bold mr-1">{index + 1}.</span> {p.teks}
+                                                            </p>
+                                                            {renderInputField(k, p)}
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="text-gray-400 italic text-sm">Tidak ada pertanyaan.</div>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
 
-                        {/* TOMBOL SIMPAN */}
                         <div className="flex justify-end pt-4 pb-10">
-                            <button
-                                type="submit"
-                                disabled={processing}
-                                className={`
-                                    bg-indigo-600 text-white px-8 py-3 rounded-lg font-semibold shadow-lg transition-all transform hover:scale-105
-                                    ${processing ? 'opacity-75 cursor-not-allowed' : 'hover:bg-indigo-700'}
-                                `}
-                            >
+                            <button type="submit" disabled={processing} className="bg-indigo-600 text-white px-8 py-3 rounded-lg font-semibold shadow-lg hover:bg-indigo-700">
                                 {processing ? 'Menyimpan...' : 'Simpan Data'}
                             </button>
                         </div>

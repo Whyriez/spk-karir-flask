@@ -97,7 +97,7 @@ class Kriteria(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     kode = db.Column(db.String(255), unique=True, nullable=False)
     nama = db.Column(db.String(255), nullable=False)
-    pertanyaan = db.Column(db.Text, nullable=True)
+    # pertanyaan = db.Column(db.Text, nullable=True)
 
     # Definisi UI
     tipe_input = db.Column(db.Enum(TipeInputEnum), default=TipeInputEnum.likert, nullable=False)
@@ -125,6 +125,23 @@ class Kriteria(db.Model):
 
     created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
     updated_at = db.Column(db.DateTime(timezone=True), onupdate=func.now())
+
+
+class Pertanyaan(db.Model):
+    __tablename__ = 'pertanyaans'
+
+    id = db.Column(db.Integer, primary_key=True)
+    kriteria_id = db.Column(db.Integer, db.ForeignKey('kriteria.id', ondelete='CASCADE'), nullable=False)
+
+    teks = db.Column(db.Text, nullable=False)
+    urutan = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+
+    created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
+    updated_at = db.Column(db.DateTime(timezone=True), onupdate=func.now())
+
+    # Relasi balik
+    kriteria = db.relationship('Kriteria', backref=db.backref('list_pertanyaan', cascade="all, delete-orphan"))
 
 
 class BwmComparison(db.Model):
@@ -183,6 +200,8 @@ class HasilRekomendasi(db.Model):
     skor_wirausaha = db.Column(db.Float, nullable=True)
 
     keputusan_terbaik = db.Column(db.String(255), nullable=False)
+
+    detail_snapshot = db.Column(JSON, nullable=True)
 
     tanggal_hitung = db.Column(db.DateTime(timezone=True), server_default=func.now())
     created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())

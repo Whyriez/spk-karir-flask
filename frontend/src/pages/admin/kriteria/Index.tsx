@@ -15,7 +15,6 @@ interface Kriteria {
     id: number;
     kode: string;
     nama: string;
-    pertanyaan: string;
     atribut: string;
     kategori: string;
     tipe_input: string;
@@ -40,7 +39,6 @@ export default function KriteriaIndex() {
         id: null,
         kode: '',
         nama: '',
-        pertanyaan: '',
         atribut: 'benefit', // Default Benefit
         kategori: 'kuesioner',
         tipe_input: 'likert',
@@ -268,18 +266,6 @@ export default function KriteriaIndex() {
                                                 required
                                             />
                                         </div>
-                                    </div>
-
-                                    <div>
-                                        <InputLabel value="Pertanyaan untuk Siswa (Jika ada)" />
-                                        <textarea
-                                            className="w-full mt-1 border-gray-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm p-3 bg-white"
-                                            rows={3}
-                                            placeholder="Contoh: Seberapa besar dukungan orang tua kamu?"
-                                            value={form.pertanyaan}
-                                            onChange={e => setForm({...form, pertanyaan: e.target.value})}
-                                        />
-                                        <p className="text-[11px] text-gray-500 mt-1 italic">Kosongkan jika datanya diambil otomatis (seperti Nilai Rapor).</p>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">

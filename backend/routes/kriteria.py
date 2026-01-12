@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt
-from models import db, Kriteria, AtributEnum, TipeInputEnum, KategoriEnum, SumberNilaiEnum, RoleEnum
+from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
+from sqlalchemy import or_
+from models import db, Kriteria, User, Pertanyaan, AtributEnum, TipeInputEnum, KategoriEnum, SumberNilaiEnum, RoleEnum
 
 kriteria_bp = Blueprint('kriteria', __name__)
 
@@ -10,15 +11,45 @@ kriteria_bp = Blueprint('kriteria', __name__)
 @kriteria_bp.route('/', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def get_kriteria():
-    kriterias = Kriteria.query.order_by(Kriteria.kode.asc()).all()
+    current_user_id = get_jwt_identity()
+    claims = get_jwt()
+    role = claims.get('role')
+
+    query = Kriteria.query
+
+    # 2. LOGIKA FILTER KHUSUS PAKAR
+    if role == 'pakar':
+        user = User.query.get(current_user_id)
+
+        # Pastikan user ditemukan dan punya jenis_pakar
+        if user and user.jenis_pakar:
+            # Filter: Milik pakar tersebut ATAU milik umum
+            query = query.filter(
+                or_(
+                    Kriteria.penanggung_jawab == user.jenis_pakar,  # Eksklusif
+                    Kriteria.penanggung_jawab == 'umum',  # Bisa keduanya
+                    Kriteria.penanggung_jawab == 'all'  # Alias lain untuk umum
+                )
+            )
+
+    kriterias = query.order_by(Kriteria.kode.asc()).all()
 
     data = []
     for k in kriterias:
+        # Ambil sub-pertanyaan
+        list_pertanyaan = []
+        for p in k.list_pertanyaan:
+            if p.is_active:
+                list_pertanyaan.append({
+                    'id': p.id,
+                    'teks': p.teks
+                })
+
         data.append({
             'id': k.id,
             'kode': k.kode,
             'nama': k.nama,
-            'pertanyaan': k.pertanyaan,
+            'list_pertanyaan': list_pertanyaan,
             # Handle Enum/String conversion safely
             'tipe_input': k.tipe_input.value if hasattr(k.tipe_input, 'value') else str(k.tipe_input),
             'atribut': k.atribut.value if hasattr(k.atribut, 'value') else str(k.atribut),
@@ -58,7 +89,6 @@ def store():
         kriteria = Kriteria(
             kode=data['kode'],
             nama=data['nama'],
-            pertanyaan=data.get('pertanyaan'),
             tipe_input=data.get('tipe_input', 'likert'),
             atribut=data.get('atribut', 'benefit'),
             kategori=data.get('kategori', 'kuesioner'),
@@ -73,6 +103,13 @@ def store():
             # ---------------------------
         )
 
+        pertanyaan_list = data.get('list_pertanyaan', [])
+
+        for teks in pertanyaan_list:
+            if teks:
+                p = Pertanyaan(teks=teks, kriteria=kriteria)
+                db.session.add(p)
+
         db.session.add(kriteria)
         db.session.commit()
         return jsonify({'msg': 'Kriteria berhasil ditambahkan', 'data': {'id': kriteria.id}}), 201
@@ -85,13 +122,20 @@ def store():
 @kriteria_bp.route('/<int:id>', methods=['PUT'], strict_slashes=False)
 @jwt_required()
 def update(id):
+    current_user_id = get_jwt_identity()
     claims = get_jwt()
-    # Admin boleh edit semua, Pakar (GuruBK/Kaprodi) hanya boleh edit pertanyaan
     role = claims.get('role')
 
     kriteria = Kriteria.query.get(id)
     if not kriteria:
         return jsonify({'msg': 'Kriteria tidak ditemukan'}), 404
+
+    # VALIDASI HAK AKSES EDIT
+    if role == 'pakar':
+        user = User.query.get(current_user_id)
+        # Jika bukan miliknya DAN bukan umum, tolak akses
+        if user.jenis_pakar != kriteria.penanggung_jawab and kriteria.penanggung_jawab not in ['umum', 'all']:
+            return jsonify({'msg': 'Anda tidak memiliki hak akses untuk mengedit kriteria ini'}), 403
 
     data = request.get_json()
 
@@ -114,7 +158,17 @@ def update(id):
             # ----------------------------------
 
         # Admin & Pakar boleh edit pertanyaan
-        if 'pertanyaan' in data: kriteria.pertanyaan = data['pertanyaan']
+        if 'list_pertanyaan' in data:
+            # 1. Hapus pertanyaan lama (Hard delete atau Soft delete tergantung kebutuhan)
+            # Disini kita pakai strategi: Hapus semua yg lama, insert ulang (simpel)
+            Pertanyaan.query.filter_by(kriteria_id=kriteria.id).delete()
+
+            # 2. Insert baru
+            new_questions = data['list_pertanyaan']  # Expecting list of strings
+            for teks in new_questions:
+                if teks and teks.strip():
+                    p = Pertanyaan(teks=teks, kriteria_id=kriteria.id)
+                    db.session.add(p)
 
         db.session.commit()
         return jsonify({'msg': 'Kriteria berhasil diupdate'}), 200

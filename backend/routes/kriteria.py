@@ -1,12 +1,11 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from sqlalchemy import or_
-from models import db, Kriteria, User, Pertanyaan, AtributEnum, TipeInputEnum, KategoriEnum, SumberNilaiEnum, RoleEnum
+from models import db, Kriteria, User, Pertanyaan
 
 kriteria_bp = Blueprint('kriteria', __name__)
 
 
-# --- FIX: Tambahkan Route '/' juga untuk handle trailing slash ---
 @kriteria_bp.route('', methods=['GET'], strict_slashes=False)
 @kriteria_bp.route('/', methods=['GET'], strict_slashes=False)
 @jwt_required()
@@ -17,18 +16,15 @@ def get_kriteria():
 
     query = Kriteria.query
 
-    # 2. LOGIKA FILTER KHUSUS PAKAR
+    # LOGIKA FILTER KHUSUS PAKAR
     if role == 'pakar':
         user = User.query.get(current_user_id)
-
-        # Pastikan user ditemukan dan punya jenis_pakar
         if user and user.jenis_pakar:
-            # Filter: Milik pakar tersebut ATAU milik umum
             query = query.filter(
                 or_(
-                    Kriteria.penanggung_jawab == user.jenis_pakar,  # Eksklusif
-                    Kriteria.penanggung_jawab == 'umum',  # Bisa keduanya
-                    Kriteria.penanggung_jawab == 'all'  # Alias lain untuk umum
+                    Kriteria.penanggung_jawab == user.jenis_pakar,
+                    Kriteria.penanggung_jawab == 'umum',
+                    Kriteria.penanggung_jawab == 'all'
                 )
             )
 
@@ -50,19 +46,16 @@ def get_kriteria():
             'kode': k.kode,
             'nama': k.nama,
             'list_pertanyaan': list_pertanyaan,
-            # Handle Enum/String conversion safely
             'tipe_input': k.tipe_input.value if hasattr(k.tipe_input, 'value') else str(k.tipe_input),
+            'opsi_pilihan': k.opsi_pilihan,  # <--- PASTIKAN INI DI-RETURN
             'atribut': k.atribut.value if hasattr(k.atribut, 'value') else str(k.atribut),
             'kategori': k.kategori.value if hasattr(k.kategori, 'value') else str(k.kategori),
             'sumber_nilai': k.sumber_nilai.value if hasattr(k.sumber_nilai, 'value') else str(k.sumber_nilai),
-            'penanggung_jawab': k.penanggung_jawab if isinstance(k.penanggung_jawab, str) else k.penanggung_jawab.value, # Handle variasi tipe data
+            'penanggung_jawab': k.penanggung_jawab if isinstance(k.penanggung_jawab, str) else k.penanggung_jawab.value,
             'tampil_di_siswa': k.tampil_di_siswa,
-
-            # --- FIELD BARU (WAJIB ADA AGAR TABEL FRONTEND MUNCUL) ---
             'target_jalur': k.target_jalur or 'all',
             'skala_maks': k.skala_maks,
             'jalur_reverse': k.jalur_reverse
-            # ---------------------------------------------------------
         })
 
     return jsonify({'data': data})
@@ -78,7 +71,6 @@ def store():
 
     data = request.get_json()
 
-    # Validasi dasar
     if not data.get('kode') or not data.get('nama'):
         return jsonify({'msg': 'Kode dan Nama wajib diisi'}), 400
 
@@ -90,21 +82,19 @@ def store():
             kode=data['kode'],
             nama=data['nama'],
             tipe_input=data.get('tipe_input', 'likert'),
+            # Simpan opsi pilihan (List of dicts)
+            opsi_pilihan=data.get('opsi_pilihan'),  # <--- TAMBAHAN
             atribut=data.get('atribut', 'benefit'),
             kategori=data.get('kategori', 'kuesioner'),
             sumber_nilai=data.get('sumber_nilai', 'input_siswa'),
             penanggung_jawab=data.get('penanggung_jawab', 'gurubk'),
             tampil_di_siswa=bool(data.get('tampil_di_siswa', True)),
-
-            # --- KONFIGURASI DINAMIS ---
             target_jalur=data.get('target_jalur', 'all'),
             skala_maks=float(data.get('skala_maks', 5)),
-            jalur_reverse=data.get('jalur_reverse') or None  # Simpan None jika string kosong
-            # ---------------------------
+            jalur_reverse=data.get('jalur_reverse') or None
         )
 
         pertanyaan_list = data.get('list_pertanyaan', [])
-
         for teks in pertanyaan_list:
             if teks:
                 p = Pertanyaan(teks=teks, kriteria=kriteria)
@@ -130,41 +120,37 @@ def update(id):
     if not kriteria:
         return jsonify({'msg': 'Kriteria tidak ditemukan'}), 404
 
-    # VALIDASI HAK AKSES EDIT
+    # VALIDASI HAK AKSES
     if role == 'pakar':
         user = User.query.get(current_user_id)
-        # Jika bukan miliknya DAN bukan umum, tolak akses
         if user.jenis_pakar != kriteria.penanggung_jawab and kriteria.penanggung_jawab not in ['umum', 'all']:
-            return jsonify({'msg': 'Anda tidak memiliki hak akses untuk mengedit kriteria ini'}), 403
+            return jsonify({'msg': 'Anda tidak memiliki hak akses'}), 403
 
     data = request.get_json()
 
     try:
-        # Admin: Full Access
         if role == 'admin':
             if 'kode' in data: kriteria.kode = data['kode']
             if 'nama' in data: kriteria.nama = data['nama']
             if 'tipe_input' in data: kriteria.tipe_input = data['tipe_input']
+
+            # UPDATE OPSI PILIHAN
+            if 'opsi_pilihan' in data:
+                kriteria.opsi_pilihan = data['opsi_pilihan']  # <--- TAMBAHAN
+
             if 'atribut' in data: kriteria.atribut = data['atribut']
             if 'kategori' in data: kriteria.kategori = data['kategori']
             if 'sumber_nilai' in data: kriteria.sumber_nilai = data['sumber_nilai']
             if 'penanggung_jawab' in data: kriteria.penanggung_jawab = data['penanggung_jawab']
             if 'tampil_di_siswa' in data: kriteria.tampil_di_siswa = bool(data['tampil_di_siswa'])
-
-            # --- UPDATE KONFIGURASI DINAMIS ---
             if 'target_jalur' in data: kriteria.target_jalur = data['target_jalur']
             if 'skala_maks' in data: kriteria.skala_maks = float(data['skala_maks'])
             if 'jalur_reverse' in data: kriteria.jalur_reverse = data['jalur_reverse'] or None
-            # ----------------------------------
 
-        # Admin & Pakar boleh edit pertanyaan
+        # Admin & Pakar boleh edit pertanyaan (logic pertanyaan tetap sama)
         if 'list_pertanyaan' in data:
-            # 1. Hapus pertanyaan lama (Hard delete atau Soft delete tergantung kebutuhan)
-            # Disini kita pakai strategi: Hapus semua yg lama, insert ulang (simpel)
             Pertanyaan.query.filter_by(kriteria_id=kriteria.id).delete()
-
-            # 2. Insert baru
-            new_questions = data['list_pertanyaan']  # Expecting list of strings
+            new_questions = data['list_pertanyaan']
             for teks in new_questions:
                 if teks and teks.strip():
                     p = Pertanyaan(teks=teks, kriteria_id=kriteria.id)

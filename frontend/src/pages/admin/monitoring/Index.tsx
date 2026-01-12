@@ -1,28 +1,25 @@
 import React, {useEffect, useState, FormEvent} from 'react';
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Modal from '@/components/Modal';
 import SecondaryButton from '@/components/SecondaryButton';
 import PrimaryButton from '@/components/PrimaryButton';
 import apiClient from '@/lib/axios';
-import {useOutletContext} from "react-router-dom";
-import type {LayoutContextType} from "../../../interface/layout.ts";
 import Header from "../../../components/Header.tsx";
 
 // Tipe Data
 interface MonitoringItem {
     id: number;
     user_id?: number;
-    name?: string; // Fallback jika user relation null
+    name?: string;
     nisn?: string;
-    // Struktur data bisa variatif dari backend, kita handle flexible
+    // Struktur nested
     user?: {
         name: string;
         nisn: string;
         jurusan?: { nama_jurusan: string };
     };
-    jurusan?: { nama_jurusan: string }; // Fallback
-    kelas?: string;
-    tingkat_kelas?: string;
+    jurusan?: { nama_jurusan: string };
+    kelas?: string; // Dari Backend "Belum Mengisi"
+    tingkat_kelas?: string; // Dari Backend "Sudah Mengisi" (Snapshot)
     // Data Hasil
     keputusan_terbaik?: string;
     skor_studi?: number;
@@ -55,7 +52,7 @@ export default function MonitoringIndex() {
     // Filter State
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedPeriode, setSelectedPeriode] = useState('');
-    const [selectedStatus, setSelectedStatus] = useState('sudah'); // Default 'sudah' mirip Laravel
+    const [selectedStatus, setSelectedStatus] = useState('sudah');
 
     // Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -67,18 +64,15 @@ export default function MonitoringIndex() {
     const fetchData = async (url: string | null = '/monitoring') => {
         setLoading(true);
         try {
-            // endpoint backend harus menghandle param: search, periode_id, status
             const response = await apiClient.get(url || '/monitoring', {
                 params: {
                     search: searchTerm,
                     periode_id: selectedPeriode,
                     status: selectedStatus,
-                    page: 1 // Reset ke page 1 jika filter berubah (logic handled by backend usually)
+                    page: 1
                 }
             });
 
-            // Asumsi backend mengembalikan struktur: { results: { data: [], ... }, periodes: [] }
-            // Sesuaikan dengan response Flask Anda
             setResults(response.data.results);
             setPeriodes(response.data.periodes || []);
         } catch (error) {
@@ -88,7 +82,7 @@ export default function MonitoringIndex() {
         }
     };
 
-    // Initial Load & Debounce Search
+    // Debounce Search
     useEffect(() => {
         const timer = setTimeout(() => {
             fetchData();
@@ -97,17 +91,13 @@ export default function MonitoringIndex() {
     }, [searchTerm, selectedPeriode, selectedStatus]);
 
     // --- HANDLERS ---
-
-    // Pagination Handler
     const handlePageChange = (url: string | null) => {
         if (!url) return;
-        // Kita perlu parse URL untuk ambil query param page, atau backend support full url
-        // Karena apiClient punya baseURL, kita ambil path-nya saja atau kirim param page manual
-        const targetUrl = new URL(url).pathname + new URL(url).search;
+        // Ambil path relatif + query string
+        const targetUrl = url.replace(apiClient.defaults.baseURL || '', '');
         fetchData(targetUrl);
     };
 
-    // Modal Handlers
     const openModal = (item: MonitoringItem) => {
         setSelectedItem(item);
         setCatatanInput(item.catatan_guru_bk || '');
@@ -125,7 +115,7 @@ export default function MonitoringIndex() {
             });
 
             setIsModalOpen(false);
-            fetchData(); // Refresh data table
+            fetchData();
         } catch (error) {
             console.error("Gagal menyimpan catatan", error);
             alert("Terjadi kesalahan saat menyimpan catatan.");
@@ -140,8 +130,7 @@ export default function MonitoringIndex() {
     };
 
     return (
-        <div
-        >
+        <div>
             <Header>
                 <h2 className="font-semibold text-xl text-gray-800 leading-tight">Monitoring Siswa</h2>
             </Header>
@@ -149,7 +138,7 @@ export default function MonitoringIndex() {
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
 
-                        {/* --- FILTER SECTION (PERSIS LARAVEL) --- */}
+                        {/* --- FILTER SECTION --- */}
                         <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
                             {/* Search */}
                             <div className="flex gap-2 w-full md:w-1/3">
@@ -164,7 +153,6 @@ export default function MonitoringIndex() {
 
                             {/* Dropdowns */}
                             <div className="flex gap-2 w-full md:w-2/3 justify-end">
-                                {/* Filter Status */}
                                 <select
                                     className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm text-sm"
                                     value={selectedStatus}
@@ -174,7 +162,6 @@ export default function MonitoringIndex() {
                                     <option value="belum">Belum Mengisi</option>
                                 </select>
 
-                                {/* Filter Periode */}
                                 <select
                                     className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm text-sm"
                                     value={selectedPeriode}
@@ -197,20 +184,13 @@ export default function MonitoringIndex() {
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Siswa</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kelas
-                                        / Jurusan
-                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kelas / Jurusan</th>
 
-                                    {/* CONDITIONAL COLUMNS */}
                                     {selectedStatus === 'sudah' ? (
                                         <>
                                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Keputusan</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nilai
-                                                Optima
-                                            </th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Catatan
-                                                BK
-                                            </th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nilai Optima</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Catatan BK</th>
                                             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                                         </>
                                     ) : (
@@ -221,8 +201,7 @@ export default function MonitoringIndex() {
                                 <tbody className="bg-white divide-y divide-gray-200">
                                 {loading ? (
                                     <tr>
-                                        <td colSpan={7} className="px-6 py-8 text-center text-gray-500">Memuat data...
-                                        </td>
+                                        <td colSpan={7} className="px-6 py-8 text-center text-gray-500">Memuat data...</td>
                                     </tr>
                                 ) : !results?.data || results.data.length === 0 ? (
                                     <tr>
@@ -237,7 +216,12 @@ export default function MonitoringIndex() {
                                         const siswaName = item.user?.name || item.name || '-';
                                         const siswaNisn = item.user?.nisn || item.nisn || '-';
                                         const jurusanName = item.user?.jurusan?.nama_jurusan || item.jurusan?.nama_jurusan || '-';
+
+                                        // LOGIKA TAMPILAN KELAS:
+                                        // Jika "Sudah Mengisi" -> ambil dari 'tingkat_kelas' (snapshot)
+                                        // Jika "Belum Mengisi" -> ambil dari 'kelas' (riwayat aktif)
                                         const kelas = item.tingkat_kelas || item.kelas || '-';
+
                                         const rowNumber = results.current_page ? (results.current_page - 1) * results.per_page + index + 1 : index + 1;
 
                                         return (
@@ -250,10 +234,9 @@ export default function MonitoringIndex() {
                                                     <div className="text-sm text-gray-500">{siswaNisn}</div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                    {kelas} - {jurusanName}
+                                                    <span className="font-bold">Kelas {kelas}</span> - {jurusanName}
                                                 </td>
 
-                                                {/* KONTEN KONDISIONAL */}
                                                 {selectedStatus === 'sudah' ? (
                                                     <>
                                                         <td className="px-6 py-4 whitespace-nowrap">
@@ -264,11 +247,9 @@ export default function MonitoringIndex() {
                                                         </td>
                                                         <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
                                                             {item.catatan_guru_bk ? (
-                                                                <span
-                                                                    title={item.catatan_guru_bk}>{item.catatan_guru_bk}</span>
+                                                                <span title={item.catatan_guru_bk}>{item.catatan_guru_bk}</span>
                                                             ) : (
-                                                                <span
-                                                                    className="italic text-gray-300">Belum ada catatan</span>
+                                                                <span className="italic text-gray-300">Belum ada catatan</span>
                                                             )}
                                                         </td>
                                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -282,8 +263,7 @@ export default function MonitoringIndex() {
                                                     </>
                                                 ) : (
                                                     <td className="px-6 py-4 whitespace-nowrap">
-                                                            <span
-                                                                className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 border border-red-200">
+                                                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 border border-red-200">
                                                                 Belum Mengisi
                                                             </span>
                                                     </td>
@@ -307,7 +287,6 @@ export default function MonitoringIndex() {
                             {results?.links && results.links.length > 3 && (
                                 <div className="flex gap-1">
                                     {results.links.map((link, k) => {
-                                        // Skip jika url null (biasanya 'Previous' di halaman 1)
                                         if (!link.url && !link.label) return null;
 
                                         return (
@@ -363,7 +342,7 @@ export default function MonitoringIndex() {
     );
 }
 
-// --- SUB COMPONENT (BADGE WARNA) ---
+// --- SUB COMPONENT ---
 function BadgeKeputusan({label}: { label: string }) {
     let classes = "bg-gray-100 text-gray-800";
 

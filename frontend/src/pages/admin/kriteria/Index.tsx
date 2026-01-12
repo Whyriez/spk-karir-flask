@@ -10,7 +10,13 @@ import Checkbox from '@/components/Checkbox';
 import apiClient from '@/lib/axios';
 import Header from "../../../components/Header.tsx";
 
-// Tipe Data
+// Tipe Option Select
+interface SelectOption {
+    val: number;
+    label: string;
+}
+
+// Tipe Data Kriteria
 interface Kriteria {
     id: number;
     kode: string;
@@ -24,6 +30,7 @@ interface Kriteria {
     target_jalur: string;
     skala_maks: number;
     jalur_reverse: string | null;
+    opsi_pilihan?: SelectOption[] | string;
 }
 
 export default function KriteriaIndex() {
@@ -39,20 +46,19 @@ export default function KriteriaIndex() {
         id: null,
         kode: '',
         nama: '',
-        atribut: 'benefit', // Default Benefit
+        atribut: 'benefit',
         kategori: 'kuesioner',
-        tipe_input: 'likert',
+        tipe_input: 'likert', // Default Likert
         sumber_nilai: 'input_siswa',
         penanggung_jawab: 'gurubk',
         tampil_di_siswa: true,
         target_jalur: 'all',
-        skala_maks: 5,
+        skala_maks: 5, // Default 5 untuk Likert
         jalur_reverse: ''
     };
 
     const [form, setForm] = useState(initialForm);
-
-    // State untuk Checkbox Target
+    const [selectOptions, setSelectOptions] = useState<SelectOption[]>([]);
     const [targets, setTargets] = useState({
         studi: true,
         kerja: true,
@@ -90,8 +96,25 @@ export default function KriteriaIndex() {
             setForm({
                 ...initialForm,
                 ...item,
-                jalur_reverse: item.jalur_reverse || ''
+                jalur_reverse: item.jalur_reverse || '',
+                // Pastikan jika Likert, skala_maks dipaksa 5 (untuk data lama yg mungkin salah)
+                skala_maks: item.tipe_input === 'likert' ? 5 : item.skala_maks
             });
+
+            // Load opsi pilihan
+            let loadedOpts: SelectOption[] = [];
+            if (item.tipe_input === 'select' && item.opsi_pilihan) {
+                if (Array.isArray(item.opsi_pilihan)) {
+                    loadedOpts = item.opsi_pilihan;
+                } else if (typeof item.opsi_pilihan === 'string') {
+                    try {
+                        const parsed = JSON.parse(item.opsi_pilihan);
+                        if (Array.isArray(parsed)) loadedOpts = parsed;
+                    } catch (e) { console.error(e); }
+                }
+            }
+            setSelectOptions(loadedOpts);
+
             const t = item.target_jalur || 'all';
             setTargets({
                 studi: t.includes('all') || t.includes('studi'),
@@ -100,20 +123,89 @@ export default function KriteriaIndex() {
             });
         } else {
             setIsEditMode(false);
-            setForm(initialForm);
+            setForm(initialForm); // Default sudah Likert & Max 5
+            setSelectOptions([]);
             setTargets({ studi: true, kerja: true, wirausaha: true });
         }
         setIsModalOpen(true);
     };
 
+    // --- HANDLER TIPE INPUT ---
+    const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const val = e.target.value;
+        let newMax = form.skala_maks;
+
+        // Logika Otomatisasi Skala
+        if (val === 'likert') {
+            newMax = 5; // Patenkan 5
+        } else if (val === 'number' && form.tipe_input === 'likert') {
+            newMax = 100; // Kembalikan ke default umum jika pindah ke number (opsional)
+        }
+
+        setForm({ ...form, tipe_input: val, skala_maks: newMax });
+    };
+
+    // --- VALIDASI DAN HANDLER OPSI ---
+    const addOption = () => {
+        const nextVal = selectOptions.length + 1;
+        if (nextVal > form.skala_maks) {
+            alert(`Tidak dapat menambah opsi karena melebihi Skala Maksimal (${form.skala_maks}).`);
+            return;
+        }
+        setSelectOptions([...selectOptions, { val: nextVal, label: '' }]);
+    };
+
+    const removeOption = (index: number) => {
+        setSelectOptions(selectOptions.filter((_, i) => i !== index));
+    };
+
+    const updateOption = (index: number, field: 'val' | 'label', value: string | number) => {
+        if (field === 'val') {
+            const numVal = Number(value);
+            if (numVal > form.skala_maks) {
+                alert(`Nilai tidak boleh lebih dari ${form.skala_maks}.`);
+                return;
+            }
+        }
+        const newOpts = [...selectOptions];
+        newOpts[index] = { ...newOpts[index], [field]: value };
+        setSelectOptions(newOpts);
+    };
+
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
+
+        // Final check untuk Likert (Paten 5)
+        let payload = { ...form };
+        const { list_pertanyaan, ...cleanForm } = form as any;
+
+        if (form.tipe_input === 'likert') {
+            payload.skala_maks = 5; // Pastikan 5 terkirim
+        } else if (form.tipe_input === 'select') {
+            // Validasi Select
+            const invalidOpts = selectOptions.filter(o => o.val > form.skala_maks);
+            if (invalidOpts.length > 0) {
+                alert(`Gagal: Opsi melebihi skala maksimal.`); return;
+            }
+            if (selectOptions.some(o => !o.label.trim())) {
+                alert("Gagal: Label opsi harus diisi."); return;
+            }
+        }
+
+        // Siapkan payload akhir
+        const finalPayload = {
+            ...cleanForm,
+            // Override skala_maks jika likert
+            skala_maks: form.tipe_input === 'likert' ? 5 : form.skala_maks,
+            opsi_pilihan: form.tipe_input === 'select' ? selectOptions : null
+        };
+
         setProcessing(true);
         try {
             if (isEditMode && form.id) {
-                await apiClient.put(`/kriteria/${form.id}`, form);
+                await apiClient.put(`/kriteria/${form.id}`, finalPayload);
             } else {
-                await apiClient.post('/kriteria', form);
+                await apiClient.post('/kriteria', finalPayload);
             }
             fetchData();
             setIsModalOpen(false);
@@ -157,7 +249,7 @@ export default function KriteriaIndex() {
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-16">Kode</th>
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Nama Kriteria</th>
                                         <th className="px-6 py-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Jalur Karir</th>
-                                        <th className="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Sifat</th>
+                                        <th className="px-6 py-4 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Tipe</th>
                                         <th className="px-6 py-4 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Aksi</th>
                                     </tr>
                                 </thead>
@@ -196,8 +288,8 @@ export default function KriteriaIndex() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-center align-top">
-                                                    <span className={`text-[10px] px-2 py-1 rounded border uppercase font-bold ${item.atribut === 'benefit' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>
-                                                        {item.atribut === 'benefit' ? 'Benefit' : 'Cost'}
+                                                    <span className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
+                                                        {item.tipe_input}
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 text-right text-sm font-medium align-top">
@@ -217,7 +309,6 @@ export default function KriteriaIndex() {
             </div>
 
             {/* --- MODAL FORM --- */}
-            {/* maxWidth="2xl" agar tidak terlalu lebar tapi cukup untuk 2 kolom */}
             <Modal show={isModalOpen} onClose={() => setIsModalOpen(false)} maxWidth="2xl">
                 <form onSubmit={handleSubmit} className="p-8">
 
@@ -262,7 +353,7 @@ export default function KriteriaIndex() {
                                                 value={form.nama}
                                                 onChange={e => setForm({...form, nama: e.target.value})}
                                                 className="w-full mt-1 bg-white"
-                                                placeholder="Contoh: Nilai Akademik"
+                                                placeholder="Contoh: Penghasilan Orang Tua"
                                                 required
                                             />
                                         </div>
@@ -274,11 +365,11 @@ export default function KriteriaIndex() {
                                             <select
                                                 className="w-full mt-1 border-gray-300 rounded-lg shadow-sm text-sm bg-white"
                                                 value={form.tipe_input}
-                                                onChange={e => setForm({...form, tipe_input: e.target.value})}
+                                                onChange={handleTypeChange}
                                             >
-                                                <option value="likert">Pilihan Skala (Sangat Setuju dll)</option>
+                                                <option value="likert">Skala Likert (Sangat Setuju dll)</option>
                                                 <option value="number">Angka Langsung (0-100)</option>
-                                                <option value="select">Pilihan Ganda (A/B/C)</option>
+                                                <option value="select">Pilihan Dropdown (Select)</option>
                                             </select>
                                         </div>
                                         <div>
@@ -294,6 +385,39 @@ export default function KriteriaIndex() {
                                             </select>
                                         </div>
                                     </div>
+
+                                    {/* --- DYNAMIC OPTION INPUT --- */}
+                                    {form.tipe_input === 'select' && (
+                                        <div className="mt-4 bg-white p-4 border border-gray-200 rounded-lg">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <InputLabel value="Opsi Pilihan (Label & Nilai)" className="text-indigo-600" />
+                                                <button type="button" onClick={addOption} className="text-xs text-white bg-indigo-500 px-2 py-1 rounded hover:bg-indigo-600">
+                                                    + Tambah Opsi
+                                                </button>
+                                            </div>
+                                            <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                                                {selectOptions.map((opt, idx) => (
+                                                    <div key={idx} className="flex gap-2 items-center">
+                                                        <TextInput
+                                                            type="number"
+                                                            className="w-16 text-center text-sm"
+                                                            placeholder="Val"
+                                                            value={opt.val}
+                                                            onChange={(e) => updateOption(idx, 'val', e.target.value)}
+                                                        />
+                                                        <TextInput
+                                                            type="text"
+                                                            className="flex-1 text-sm"
+                                                            placeholder="Label"
+                                                            value={opt.label}
+                                                            onChange={(e) => updateOption(idx, 'label', e.target.value)}
+                                                        />
+                                                        <button type="button" onClick={() => removeOption(idx)} className="text-red-500 hover:text-red-700">x</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -306,7 +430,7 @@ export default function KriteriaIndex() {
                                 </h3>
 
                                 <div className="space-y-5">
-                                    {/* --- DITAMBAHKAN: Setting Benefit / Cost --- */}
+                                    {/* Setting Benefit / Cost */}
                                     <div className="border-b border-emerald-200 pb-4">
                                         <InputLabel value="Sifat Nilai (Benefit/Cost)" className="text-emerald-900 mb-1 block font-semibold" />
                                         <select
@@ -317,11 +441,7 @@ export default function KriteriaIndex() {
                                             <option value="benefit">Makin TINGGI nilainya, makin BAGUS (Benefit)</option>
                                             <option value="cost">Makin KECIL nilainya, makin BAGUS (Cost)</option>
                                         </select>
-                                        <p className="text-[11px] text-gray-500 mt-1 italic">
-                                            *Contoh Cost: Jarak Rumah (Makin dekat/kecil angka km-nya, makin bagus).
-                                        </p>
                                     </div>
-                                    {/* --------------------------------------------- */}
 
                                     {/* Target Jalur */}
                                     <div>
@@ -342,22 +462,31 @@ export default function KriteriaIndex() {
                                         </div>
                                     </div>
 
-                                    {/* Skala Nilai */}
-                                    <div>
-                                        <InputLabel value="Rentang Nilai Maksimal" className="text-emerald-900" />
-                                        <div className="flex items-center gap-3 mt-1">
-                                            <TextInput
-                                                type="number"
-                                                value={form.skala_maks}
-                                                onChange={e => setForm({...form, skala_maks: parseFloat(e.target.value)})}
-                                                className="w-24 text-center font-bold bg-white"
-                                            />
-                                            <div className="text-xs text-gray-500 leading-tight">
-                                                <p>Isi <b>5</b> jika inputnya berupa Pilihan (Sangat Baik s/d Buruk).</p>
-                                                <p>Isi <b>100</b> jika inputnya berupa Nilai Rapor/Angka.</p>
+                                    {/* Skala Nilai - HANYA MUNCUL JIKA BUKAN LIKERT */}
+                                    {form.tipe_input !== 'likert' && (
+                                        <div>
+                                            <InputLabel value="Rentang Nilai Maksimal" className="text-emerald-900" />
+                                            <div className="flex items-center gap-3 mt-1">
+                                                <TextInput
+                                                    type="number"
+                                                    value={form.skala_maks}
+                                                    onChange={e => setForm({...form, skala_maks: parseFloat(e.target.value)})}
+                                                    className="w-24 text-center font-bold bg-white"
+                                                />
+                                                <div className="text-xs text-gray-500 leading-tight">
+                                                    <p>Isi <b>100</b> jika inputnya berupa Nilai Rapor/Angka.</p>
+                                                    <p>Atau sesuaikan dengan jumlah Opsi Pilihan (Select).</p>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
+
+                                    {form.tipe_input === 'likert' && (
+                                        <div className="bg-emerald-100 text-emerald-800 text-xs p-3 rounded border border-emerald-300">
+                                            <strong>Mode Likert Aktif:</strong><br/>
+                                            Skala nilai otomatis dipatenkan menjadi <b>1 s/d 5</b> (STS, TS, N, S, SS).
+                                        </div>
+                                    )}
 
                                     {/* Advanced Logic (Reverse) */}
                                     <div className="pt-2 border-t border-emerald-200">
@@ -372,9 +501,6 @@ export default function KriteriaIndex() {
                                             <option value="studi">Ya, Khusus untuk Jalur KULIAH</option>
                                             <option value="wirausaha">Ya, Khusus untuk Jalur WIRAUSAHA</option>
                                         </select>
-                                        <div className="mt-2 bg-yellow-50 text-yellow-800 text-[11px] p-2 rounded border border-yellow-200">
-                                            <strong>Contoh Penggunaan:</strong> Pada kriteria "Penghasilan Orang Tua", nilai kecil (Kurang Mampu) justru dianggap <b>Sangat Bagus</b> untuk rekomendasi jalur <b>Kerja</b>.
-                                        </div>
                                     </div>
                                 </div>
                             </div>

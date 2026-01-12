@@ -1,14 +1,16 @@
-import React, { useState, FormEventHandler } from 'react';
+import React, {useState, FormEventHandler, useEffect} from 'react';
 import Checkbox from '../components/Checkbox';
 import InputLabel from '../components/InputLabel';
 import PrimaryButton from '../components/PrimaryButton';
 import TextInput from '../components/TextInput';
-import { useNavigate } from 'react-router-dom';
-import { useLayout } from '@/contexts/LayoutContext';
+import {useNavigate} from 'react-router-dom';
+import {useLayout} from '@/contexts/LayoutContext';
+import apiClient from "../lib/axios.ts";
 
 export default function Login() {
     const navigate = useNavigate();
-    const { refreshUser } = useLayout(); // Get refresh method from context
+    const {refreshUser} = useLayout(); // Get refresh method from context
+    const [schoolName, setSchoolName] = useState('SMK Negeri 1 Gorontalo');
 
     const [data, setData] = useState({
         login_id: '',
@@ -45,7 +47,7 @@ export default function Login() {
 
                 // Small delay untuk ensure context updated
                 setTimeout(() => {
-                    navigate('/dashboard', { replace: true });
+                    navigate('/dashboard', {replace: true});
                 }, 100);
             } else {
                 // Login Gagal
@@ -59,8 +61,23 @@ export default function Login() {
         }
     };
 
+    useEffect(() => {
+        // 1. Set Title Browser
+        document.title = "SPK Penentuan Karir SMK";
+
+        // 3. Ambil Nama Sekolah dari Backend API
+        apiClient.get('/settings')
+            .then(res => {
+                if (res.data.nama_sekolah) {
+                    setSchoolName(res.data.nama_sekolah);
+                }
+            })
+            .catch(err => console.error("Gagal mengambil pengaturan sekolah", err));
+    }, []);
+
     return (
-        <div className="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gradient-to-br from-blue-500 to-indigo-700">
+        <div
+            className="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gradient-to-br from-blue-500 to-indigo-700">
             {/* Logo atau Judul */}
             <div className="text-white text-2xl font-bold mb-4">
                 SPK KARIR
@@ -83,7 +100,7 @@ export default function Login() {
 
                 <form onSubmit={submit}>
                     <div>
-                        <InputLabel value="Email atau Username/NISN" />
+                        <InputLabel value="Email atau Username/NISN"/>
                         <TextInput
                             id="login_id"
                             type="text"
@@ -92,12 +109,12 @@ export default function Login() {
                             className="mt-1 block w-full"
                             autoComplete="username"
                             autoFocus
-                            onChange={(e) => setData({ ...data, login_id: e.target.value })}
+                            onChange={(e) => setData({...data, login_id: e.target.value})}
                         />
                     </div>
 
                     <div className="mt-4">
-                        <InputLabel value="Password" />
+                        <InputLabel value="Password"/>
                         <TextInput
                             id="password"
                             type="password"
@@ -105,7 +122,7 @@ export default function Login() {
                             value={data.password}
                             className="mt-1 block w-full"
                             autoComplete="current-password"
-                            onChange={(e) => setData({ ...data, password: e.target.value })}
+                            onChange={(e) => setData({...data, password: e.target.value})}
                         />
                     </div>
 
@@ -114,7 +131,7 @@ export default function Login() {
                             <Checkbox
                                 name="remember"
                                 checked={data.remember}
-                                onChange={(e) => setData({ ...data, remember: e.target.checked })}
+                                onChange={(e) => setData({...data, remember: e.target.checked})}
                             />
                             <span className="ml-2 text-sm text-gray-600">Ingat Saya</span>
                         </label>
@@ -129,7 +146,7 @@ export default function Login() {
             </div>
 
             <div className="mt-8 text-white text-sm opacity-80">
-                &copy; 2025 SMKN 1 Gorontalo - Sistem Pendukung Keputusan
+                &copy; 2026 {schoolName} - Sistem Pendukung Keputusan
             </div>
         </div>
     );

@@ -14,10 +14,11 @@ from routes.periode import periode_bp
 from routes.jurusan import jurusan_bp
 from routes.alumni import alumni_bp
 from routes.monitoring import monitoring_bp
-from routes.promotion import promotion_bp
 from routes.settings import settings_bp
 from routes.nilai_static import nilai_static_bp
 from routes.admin_siswa import admin_siswa_bp
+from routes.admin_pakar import admin_pakar_bp
+from routes.simulation import simulation_bp
 
 from command import seed_db, migrate_fresh
 # Import konfigurasi dan database yang sudah kita siapkan
@@ -63,10 +64,11 @@ app.register_blueprint(periode_bp, url_prefix='/api/periode')
 app.register_blueprint(jurusan_bp, url_prefix='/api/jurusan')
 app.register_blueprint(alumni_bp, url_prefix='/api/alumni')
 app.register_blueprint(monitoring_bp, url_prefix='/api/monitoring')
-app.register_blueprint(promotion_bp, url_prefix='/api/promotion')
 app.register_blueprint(settings_bp, url_prefix='/api/settings')
 app.register_blueprint(nilai_static_bp, url_prefix='/api/nilai-static')
 app.register_blueprint(admin_siswa_bp, url_prefix='/api/admin/siswa')
+app.register_blueprint(admin_pakar_bp, url_prefix='/api/admin/pakar')
+app.register_blueprint(simulation_bp, url_prefix='/api/simulation')
 
 
 

@@ -8,14 +8,14 @@ import {useLayout} from '@/contexts/LayoutContext';
 
 // Memoize Navbar agar tidak re-render kecuali props berubah
 const Navbar = memo(function Navbar({
-    user,
-    schoolName,
-    menus,
-    routeIsActive,
-    onLogout,
-    showingDropdown,
-    setShowingDropdown
-}: any) {
+                                        user,
+                                        schoolName,
+                                        menus,
+                                        routeIsActive,
+                                        onLogout,
+                                        showingDropdown,
+                                        setShowingDropdown
+                                    }: any) {
     const location = useLocation();
 
     // Close mobile dropdown saat route berubah
@@ -60,7 +60,8 @@ const Navbar = memo(function Navbar({
                                                 </Dropdown.Trigger>
                                                 <Dropdown.Content>
                                                     {menu.items.map((subItem: any, subIdx: number) => (
-                                                        <Dropdown.Link key={`submenu-${index}-${subIdx}`} to={subItem.to}>
+                                                        <Dropdown.Link key={`submenu-${index}-${subIdx}`}
+                                                                       to={subItem.to}>
                                                             {subItem.label}
                                                         </Dropdown.Link>
                                                     ))}
@@ -126,9 +127,11 @@ const Navbar = memo(function Navbar({
                         if (menu.type === 'dropdown') {
                             return (
                                 <div key={`mobile-menu-${index}`}>
-                                    <div className="px-4 py-2 text-xs font-bold text-gray-400 uppercase">{menu.label}</div>
+                                    <div
+                                        className="px-4 py-2 text-xs font-bold text-gray-400 uppercase">{menu.label}</div>
                                     {menu.items.map((sub: any, subIdx: number) => (
-                                        <ResponsiveNavLink key={`mobile-submenu-${index}-${subIdx}`} to={sub.to} active={routeIsActive(sub.to)}>
+                                        <ResponsiveNavLink key={`mobile-submenu-${index}-${subIdx}`} to={sub.to}
+                                                           active={routeIsActive(sub.to)}>
                                             &rarr; {sub.label}
                                         </ResponsiveNavLink>
                                     ))}
@@ -136,7 +139,8 @@ const Navbar = memo(function Navbar({
                             )
                         }
                         return (
-                            <ResponsiveNavLink key={`mobile-navlink-${index}`} to={menu.to} active={routeIsActive(menu.to)}>
+                            <ResponsiveNavLink key={`mobile-navlink-${index}`} to={menu.to}
+                                               active={routeIsActive(menu.to)}>
                                 {menu.label}
                             </ResponsiveNavLink>
                         )
@@ -162,13 +166,20 @@ export default function AuthenticatedLayout() {
                 return [
                     {label: "Dashboard", to: "/dashboard", type: "link"},
                     {
-                        label: "Kesiswaan",
+                        label: "Lainnya",
                         type: "dropdown",
                         items: [
                             {label: "Monitoring Siswa", to: "/admin/monitoring"},
-                            {label: "Kenaikan Kelas", to: "/admin/promotion"},
+                            { label: "Lab Simulasi", to: "/admin/simulation", type: "link" },
+                        ]
+                    },
+                    {
+                        label: "Manajemen User", // Boleh digabung atau dipisah
+                        type: "dropdown",
+                        items: [
                             {label: "Data Siswa", to: "/admin/siswa"},
                             {label: "Data Alumni", to: "/admin/alumni"},
+                            {label: "Data Pakar (Guru/Kaprodi)", to: "/admin/pakar"},
                         ]
                     },
                     {
@@ -176,7 +187,6 @@ export default function AuthenticatedLayout() {
                         type: "dropdown",
                         items: [
                             {label: "Data Jurusan", to: "/admin/jurusan"},
-                            {label: "Static Jurusan", to: "/admin/nilai-static"},
                             {label: "Data Kriteria", to: "/admin/kriteria"},
                             {label: "Periode Aktif", to: "/admin/periode"},
                             {label: "Pengaturan BWM", to: "/admin/bwm/setting"},
@@ -185,11 +195,16 @@ export default function AuthenticatedLayout() {
                     {label: "Pengaturan", to: "/admin/settings", type: "link"},
                 ];
             case "pakar":
-                return [
+                const pakarMenus = [
                     {label: "Dashboard", to: "/dashboard", type: "link"},
                     {label: "Manajemen Pertanyaan", to: "/pakar/kriteria", type: "link"},
                     {label: "Input Bobot (BWM)", to: "/pakar/bwm", type: "link"},
                 ];
+                if (user.jenis_pakar === 'kaprodi') {
+                    pakarMenus.push({label: "Data Jurusan", to: "/pakar/jurusan", type: "link"});
+                }
+
+                return pakarMenus;
             case "siswa":
                 return [
                     {label: "Dashboard", to: "/dashboard", type: "link"},
@@ -212,7 +227,7 @@ export default function AuthenticatedLayout() {
 
     // Jika user null, skip rendering (akan redirect di ProtectedRoute)
     if (!user) {
-        return <Outlet />;
+        return <Outlet/>;
     }
 
     return (

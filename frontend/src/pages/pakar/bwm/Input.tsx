@@ -31,6 +31,9 @@ export default function BwmInput() {
     const [othersToWorst, setOthersToWorst] = useState<Record<string, number>>({});
     const [processing, setProcessing] = useState(false);
 
+    // Consistency Ratio State
+    const [crValue, setCrValue] = useState<number | null>(null);
+
     const user: User = JSON.parse(localStorage.getItem('user') || '{}');
 
     // Fetch Initial Data
@@ -62,6 +65,37 @@ export default function BwmInput() {
         };
         fetchContext();
     }, []);
+
+    // Effect untuk Realtime CR Calculation
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+            // Hanya hitung jika sudah ada inputan
+            if (Object.keys(bestToOthers).length === 0 && Object.keys(othersToWorst).length === 0) return;
+
+            const token = localStorage.getItem('token');
+            try {
+                 const res = await fetch('/api/bwm/calculate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        best_to_others: bestToOthers,
+                        others_to_worst: othersToWorst
+                    })
+                });
+                const json = await res.json();
+                if (res.ok) {
+                    setCrValue(json.cr);
+                }
+            } catch (err) {
+                console.error("Error calculating CR:", err);
+            }
+        }, 800); // Debounce 800ms
+
+        return () => clearTimeout(timer);
+    }, [bestToOthers, othersToWorst]);
 
     // --- LOGIKA SORTING (NATURAL SORT) MIRIP LARAVEL ---
     const sortedKriteriaList = useMemo(() => {
@@ -131,6 +165,34 @@ export default function BwmInput() {
                             Di bawah ini adalah kriteria yang menjadi tanggung jawab Anda untuk dibandingkan terhadap
                             referensi FGD.
                         </p>
+                    </div>
+
+                    {/* INFO CR REALTIME */}
+                    <div className={`p-4 mb-6 rounded-lg border flex flex-col md:flex-row justify-between items-center ${
+                        crValue === null ? 'bg-gray-50 border-gray-200' :
+                        crValue <= 0.1 ? 'bg-green-50 border-green-200 text-green-700' : 
+                        'bg-yellow-50 border-yellow-200 text-yellow-800'
+                    }`}>
+                        <div>
+                            <span className="font-bold mr-2">Consistency Ratio (CR):</span>
+                            <span className="text-2xl font-mono font-bold">
+                                {crValue !== null ? crValue.toFixed(4) : '-'}
+                            </span>
+                        </div>
+
+                        <div className="text-right mt-2 md:mt-0">
+                            {crValue === null && <span className="text-sm text-gray-500">Silakan isi perbandingan...</span>}
+                            {crValue !== null && crValue > 0.1 && (
+                                 <span className="font-bold bg-red-100 text-red-700 px-3 py-1 rounded-full text-xs uppercase tracking-wide">
+                                     Tidak Konsisten (CR &gt; 0.1)
+                                 </span>
+                            )}
+                            {crValue !== null && crValue <= 0.1 && (
+                                 <span className="font-bold bg-green-200 text-green-800 px-3 py-1 rounded-full text-xs uppercase tracking-wide">
+                                     Konsisten (CR &le; 0.1)
+                                 </span>
+                            )}
+                        </div>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">

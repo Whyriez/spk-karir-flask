@@ -18,6 +18,7 @@ interface KriteriaItem {
     kategori: string;
     opsi_pilihan?: { val: string | number; label: string }[];
     value?: string | number;
+    skala_maks: number; // <--- DITAMBAHKAN
 }
 
 
@@ -26,6 +27,9 @@ export default function InputDataSiswa() {
     const [values, setValues] = useState<Record<string, string | number>>({});
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
+    const [isEligible, setIsEligible] = useState(true);
+    const [ineligibleMsg, setIneligibleMsg] = useState('');
+
     const navigate = useNavigate();
 
     // 1. FETCH DATA
@@ -33,25 +37,83 @@ export default function InputDataSiswa() {
         const fetchData = async () => {
             try {
                 const response = await apiClient.get('/siswa/form');
-                const data = response.data.data;
 
-                setKriterias(data);
+                // Cek flag dari backend
+                if (response.data.is_eligible === false) {
+                    setIsEligible(false);
+                    setIneligibleMsg(response.data.message);
+                    setLoading(false);
+                    return; // Stop
+                }
+
+                setKriterias(response.data.data);
             } catch (error) {
                 console.error("Gagal memuat form:", error);
             } finally {
                 setLoading(false);
             }
         };
-
         fetchData();
     }, []);
+
+    if (!isEligible) {
+        return (
+            <>
+                <Header><h2 className="font-semibold text-xl text-gray-800">Input Data Siswa</h2></Header>
+                <div className="py-12">
+                    <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-6 shadow-sm rounded-r-lg">
+                            <div className="flex">
+                                <div className="flex-shrink-0">
+                                    <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div className="ml-3">
+                                    <h3 className="text-lg font-medium text-yellow-800">Akses Dibatasi</h3>
+                                    <p className="mt-2 text-sm text-yellow-700">
+                                        {ineligibleMsg}
+                                    </p>
+                                    <div className="mt-4">
+                                        <button onClick={() => navigate('/siswa/result')} className="text-sm font-bold text-yellow-800 underline hover:text-yellow-900">
+                                            Lihat Riwayat Hasil &rarr;
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </>
+        );
+    }
 
     // 2. FILTER KATEGORI
     const listAkademik = kriterias.filter(k => k.kategori === 'akademik');
     const listKuesioner = kriterias.filter(k => k.kategori === 'kuesioner');
 
     // 3. HANDLERS
-    const handleChange = (pertanyaanId: number, value: string | number) => {
+    const handleChange = (pertanyaanId: number, value: string | number, maxVal?: number) => {
+        // VALIDASI NUMBER
+        if (typeof maxVal === 'number') {
+            const numVal = parseFloat(String(value));
+
+            // Jika kosong, biarkan kosong (untuk bisa hapus)
+            if (value === '') {
+                setValues(prev => ({...prev, [pertanyaanId]: ''}));
+                return;
+            }
+
+            // Jika melebihi batas, tolak input (jangan update state)
+            if (!isNaN(numVal) && numVal > maxVal) {
+                // Opsional: alert(`Nilai maksimal adalah ${maxVal}`);
+                return;
+            }
+
+            // Jika negatif, tolak
+            if (!isNaN(numVal) && numVal < 0) return;
+        }
+
         setValues(prev => ({...prev, [pertanyaanId]: value}));
     };
 
@@ -74,21 +136,26 @@ export default function InputDataSiswa() {
     // 4. RENDER INPUT FIELD
     const renderInputField = (k: KriteriaItem, p: PertanyaanItem) => {
         const inputKey = p.id;
-        const val = values[inputKey] || '';
+        const val = values[inputKey] !== undefined ? values[inputKey] : '';
 
         // A. Tipe NUMBER
         if (k.tipe_input === 'number') {
             return (
-                <div className="flex items-center">
+                <div className="flex items-center gap-3">
                     <input
                         type="number"
                         step="0.01"
                         className="w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-2 text-sm"
-                        placeholder={`Masukkan nilai...`}
+                        placeholder={`0 - ${k.skala_maks}`}
                         value={val}
-                        onChange={(e) => handleChange(inputKey, e.target.value)}
+                        onChange={(e) => handleChange(inputKey, e.target.value, k.skala_maks)}
+                        min={0}
+                        max={k.skala_maks}
                         required
                     />
+                    <span className="text-xs text-gray-500 font-mono whitespace-nowrap bg-gray-100 px-2 py-1 rounded">
+                        Max: {k.skala_maks}
+                    </span>
                 </div>
             );
         }

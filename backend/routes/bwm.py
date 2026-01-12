@@ -204,6 +204,74 @@ def calculate_bwm_weights(criteria_codes, best_code, worst_code, best_to_others,
     return {code: float(w) for code, w in zip(criteria_codes, weights)}, cr, ksi
 
 
+@bwm_bp.route('/calculate', methods=['POST'])
+@jwt_required()
+def calculate_bwm_preview():
+    claims = get_jwt()
+    # Opsional: Cek role jika perlu
+
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+    data = request.get_json()
+
+    # Ambil Context (Best/Worst Global)
+    best_s = Setting.query.filter_by(key='bwm_best_id').first()
+    worst_s = Setting.query.filter_by(key='bwm_worst_id').first()
+
+    if not best_s or not worst_s:
+        return jsonify({'msg': 'Setting BWM belum ditemukan.'}), 400
+
+    best_id = int(best_s.value)
+    worst_id = int(worst_s.value)
+
+    # Filter Kriteria Sesuai Role (Sama seperti saat Save)
+    query = Kriteria.query
+    if user.jenis_pakar == 'gurubk':
+        query = query.filter(Kriteria.penanggung_jawab.in_(['gurubk', 'umum']))
+    elif user.jenis_pakar == 'kaprodi':
+        query = query.filter(Kriteria.penanggung_jawab.in_(['kaprodi', 'umum']))
+
+    target_kriteria = query.all()
+
+    # Pastikan Best & Worst ikut
+    global_best_obj = Kriteria.query.get(best_id)
+    global_worst_obj = Kriteria.query.get(worst_id)
+
+    if global_best_obj not in target_kriteria:
+        target_kriteria.append(global_best_obj)
+    if global_worst_obj not in target_kriteria:
+        target_kriteria.append(global_worst_obj)
+
+    # Mapping
+    kriteria_map = {str(k.id): k.kode for k in target_kriteria}
+    best_code = global_best_obj.kode
+    worst_code = global_worst_obj.kode
+    criteria_codes = list(kriteria_map.values())
+
+    # Ambil Input User
+    best_to_others_input = data.get('best_to_others', {})
+    others_to_worst_input = data.get('others_to_worst', {})
+
+    bto_mapped = {}
+    otw_mapped = {}
+
+    for kid_str, val in best_to_others_input.items():
+        if kid_str in kriteria_map:
+            bto_mapped[kriteria_map[kid_str]] = val
+
+    for kid_str, val in others_to_worst_input.items():
+        if kid_str in kriteria_map:
+            otw_mapped[kriteria_map[kid_str]] = val
+
+    try:
+        final_weights, cr, ksi = calculate_bwm_weights(
+            criteria_codes, best_code, worst_code, bto_mapped, otw_mapped
+        )
+        return jsonify({'cr': cr, 'msg': 'OK'}), 200
+    except Exception as e:
+        return jsonify({'msg': str(e), 'cr': None}), 400
+
+
 @bwm_bp.route('/save', methods=['POST'])
 @jwt_required()
 def save_bwm():

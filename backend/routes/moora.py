@@ -1,6 +1,8 @@
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, User, Kriteria, NilaiSiswa, NilaiStaticJurusan, BobotKriteria, HasilRekomendasi, Periode, Alumni
+# PENTING: Tambahkan import RiwayatKelas
+from models import db, User, Kriteria, NilaiSiswa, NilaiStaticJurusan, BobotKriteria, HasilRekomendasi, Periode, Alumni, \
+    RiwayatKelas
 from sqlalchemy import desc
 import math
 import numpy as np
@@ -8,7 +10,7 @@ import numpy as np
 moora_bp = Blueprint('moora', __name__)
 
 
-# --- FUNGSI HELPER (LOGIKA BARU) ---
+# --- FUNGSI HELPER ---
 
 def ensure_static_values(user_id):
     """Memastikan nilai ketersediaan lapangan kerja (C6) masuk ke NilaiSiswa"""
@@ -41,7 +43,7 @@ def get_aggregated_weights():
 
 def calculate_ranking(periode_id, user_id):
     ensure_static_values(user_id)
-    siswa = User.query.get(user_id)
+    # siswa = User.query.get(user_id) # Tidak lagi mengambil kelas dari tabel User
 
     # 1. Ambil Kriteria & Config dari DB
     all_kriteria = Kriteria.query.order_by(Kriteria.kode).all()
@@ -87,14 +89,9 @@ def calculate_ranking(periode_id, user_id):
         matrix[1, j] = get_val_for_jalur('kerja')
         matrix[2, j] = get_val_for_jalur('wirausaha')
 
-        # CATATAN: Isu normalisasi skala beda (0-100 vs 1-5)
-        # SUDAH otomatis ditangani oleh rumus MOORA (Vector Normalization) di bawah.
-        # Jadi kita TIDAK PERLU codingan khusus pembagi skala.
-
-    # 4. Normalisasi Vektor (Otomatis menangani skala 100 vs 5)
+    # 4. Normalisasi Vektor
     norm_matrix = np.zeros((3, num_kriteria))
     for j in range(num_kriteria):
-        # Rumus: x / sqrt(sum(x^2))
         denom = math.sqrt(sum(matrix[i, j] ** 2 for i in range(3)))
         for i in range(3):
             norm_matrix[i, j] = matrix[i, j] / denom if denom > 0 else 0
@@ -107,7 +104,6 @@ def calculate_ranking(periode_id, user_id):
             code = all_kriteria[j].kode
             weight = bobot_map.get(code, 0)
 
-            # Cek atribut (Benefit/Cost) dari DB
             if all_kriteria[j].atribut.value == 'benefit':
                 yi += norm_matrix[i, j] * weight
             else:
@@ -126,9 +122,14 @@ def calculate_ranking(periode_id, user_id):
 
     hasil.keputusan_terbaik = alternatif_names[np.argmax(y_scores)]
 
-    kelas_val = siswa.kelas_saat_ini
-    if hasattr(kelas_val, 'value'): kelas_val = kelas_val.value
-    hasil.tingkat_kelas = str(kelas_val)
+    # --- PERBAIKAN: AMBIL KELAS DARI RIWAYAT ---
+    riwayat = RiwayatKelas.query.filter_by(siswa_id=user_id, periode_id=periode_id).first()
+
+    if riwayat:
+        hasil.tingkat_kelas = riwayat.tingkat_kelas
+    else:
+        hasil.tingkat_kelas = "Unknown"
+        # -------------------------------------------------------------
 
     db.session.commit()
     return hasil, None
@@ -144,17 +145,59 @@ def get_result():
     hasil = None
     periode_nama = "-"
 
+    # KASUS 1: User minta ID spesifik (Riwayat masa lalu)
     if history_id:
         hasil = HasilRekomendasi.query.filter_by(id=history_id, siswa_id=current_user_id).first()
         if not hasil: return jsonify({'msg': 'Riwayat tidak ditemukan'}), 404
         periode_nama = hasil.periode.nama_periode if hasil.periode else f"Kelas {hasil.tingkat_kelas}"
-    else:
-        periode = Periode.query.filter_by(is_active=True).first() or Periode.query.order_by(desc(Periode.id)).first()
-        if not periode: return jsonify({'msg': 'Periode belum diatur'}), 404
 
-        periode_nama = periode.nama_periode
-        hasil, error = calculate_ranking(periode.id, current_user_id)
-        if error: return jsonify({'hasil': None, 'msg': error}), 200
+    # KASUS 2: Default (Buka halaman result)
+    else:
+        periode_aktif = Periode.query.filter_by(is_active=True).first()
+
+        # --- PERBAIKAN BUG ALUMNI & FRESH STUDENT ---
+        is_active_student = False
+
+        if periode_aktif:
+            # Cek apakah siswa punya riwayat AKTIF di periode ini?
+            riwayat = RiwayatKelas.query.filter_by(
+                siswa_id=current_user_id,
+                periode_id=periode_aktif.id,
+                status_akhir='Aktif'
+            ).first()
+            if riwayat:
+                is_active_student = True
+
+        if is_active_student:
+            # --- CEK APAKAH SUDAH ISI PENILAIAN? (FIX BUG FRESH STUDENT) ---
+            # Kita cek apakah ada data NilaiSiswa dari inputan user (non-static) untuk siswa ini
+            # Join dengan Kriteria untuk memastikan itu data input_siswa
+            has_input = db.session.query(NilaiSiswa).join(Kriteria).filter(
+                NilaiSiswa.siswa_id == current_user_id,
+                Kriteria.sumber_nilai == 'input_siswa'
+            ).first()
+
+            if not has_input:
+                # JIKA BELUM INPUT: Jangan hitung!
+                # Frontend akan menerima 404 dan menampilkan "Data belum tersedia"
+                return jsonify({'msg': 'Belum ada data penilaian. Silakan isi kuesioner terlebih dahulu.'}), 404
+
+            # JIKA SUDAH INPUT: Hitung baru/Update (Agar skor selalu sync dengan bobot terbaru)
+            periode_nama = periode_aktif.nama_periode
+            hasil, error = calculate_ranking(periode_aktif.id, current_user_id)
+            if error: return jsonify({'hasil': None, 'msg': error}), 200
+
+        else:
+            # Jika siswa TIDAK aktif (Alumni/Lulus/Belum didaftarkan) -> AMBIL DATA TERAKHIR
+            # Jangan hitung baru agar tidak merusak data periode aktif
+            hasil = HasilRekomendasi.query.filter_by(siswa_id=current_user_id) \
+                .order_by(desc(HasilRekomendasi.id)).first()
+
+            if hasil:
+                periode_nama = hasil.periode.nama_periode if hasil.periode else "-"
+            else:
+                return jsonify({'msg': 'Belum ada data hasil penilaian.'}), 404
+        # ---------------------------
 
     # Cari Alumni Relevan
     alumni_list = []

@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-from models import db, Kriteria, NilaiSiswa, User, Jurusan, Pertanyaan, HasilRekomendasi, Periode
+from models import db, Kriteria, NilaiSiswa, User, Jurusan, Pertanyaan, HasilRekomendasi, Periode, RiwayatKelas
 import json
 
 siswa_bp = Blueprint('siswa', __name__)
@@ -11,6 +11,33 @@ siswa_bp = Blueprint('siswa', __name__)
 @jwt_required()
 def get_form():
     current_user_id = get_jwt_identity()
+
+    # --- CEK ELIGIBILITY (BARU) ---
+    periode_aktif = Periode.query.filter_by(is_active=True).first()
+    is_eligible = False
+    status_message = ""
+
+    if periode_aktif:
+        riwayat = RiwayatKelas.query.filter_by(
+            siswa_id=current_user_id,
+            periode_id=periode_aktif.id,
+            status_akhir='Aktif'
+        ).first()
+
+        if riwayat:
+            is_eligible = True
+        else:
+            status_message = "Anda tidak terdaftar aktif di periode ini (Mungkin sudah Lulus)."
+    else:
+        status_message = "Sistem sedang tidak menerima penilaian (Periode Non-Aktif)."
+
+    # Jika tidak eligible, langsung return (Hemat resource)
+    if not is_eligible:
+        return jsonify({
+            'is_eligible': False,
+            'message': status_message,
+            'data': []
+        })
 
     # Ambil kriteria yang aktif & tampil di siswa
     kriterias = Kriteria.query.filter_by(
@@ -57,10 +84,11 @@ def get_form():
             'atribut': k.atribut.value if hasattr(k.atribut, 'value') else str(k.atribut),
             'kategori': k.kategori.value if hasattr(k.kategori, 'value') else str(k.kategori),
             'opsi_pilihan': opsi,
+            'skala_maks': k.skala_maks,
             'value': None  # Placeholder
         })
 
-    return jsonify({'data': data})
+    return jsonify({'is_eligible': True, 'data': data})
 
 
 # --- SAVE VALUES ---
@@ -68,9 +96,28 @@ def get_form():
 @jwt_required()
 def save_nilai():
     user_id = get_jwt_identity()
-    data = request.get_json()
 
-    # Data berupa dict: {'1': 85, '2': 5, ...} (Key=KriteriaID, Val=Nilai)
+    # --- VALIDASI STATUS SISWA (BARU) ---
+    periode_aktif = Periode.query.filter_by(is_active=True).first()
+    if not periode_aktif:
+        return jsonify({'msg': 'Tidak ada periode tahun ajaran yang aktif.'}), 400
+
+    # Cek apakah siswa terdaftar & aktif di periode ini?
+    riwayat = RiwayatKelas.query.filter_by(
+        siswa_id=user_id,
+        periode_id=periode_aktif.id,
+        status_akhir='Aktif'  # Hanya yang statusnya Aktif yang boleh input
+    ).first()
+
+    if not riwayat:
+        # Cek apakah dia alumni (Lulus di periode sebelumnya)
+        # Atau memang belum didaftarkan admin
+        return jsonify({
+            'msg': 'Akses ditolak. Anda tidak terdaftar sebagai siswa aktif pada periode ini atau sudah dinyatakan Lulus.'
+        }), 403
+    # ------------------------------------
+
+    data = request.get_json()
     values = data.get('values', {})
 
     temp_scores = {}
@@ -117,15 +164,14 @@ def save_nilai():
 
             nilai_obj.nilai_input = avg_score
 
-        periode = Periode.query.filter_by(is_active=True).first()
-        if periode:
-            hasil = HasilRekomendasi.query.filter_by(siswa_id=user_id, periode_id=periode.id).first()
+        if periode_aktif:
+            hasil = HasilRekomendasi.query.filter_by(siswa_id=user_id, periode_id=periode_aktif.id).first()
             if not hasil:
-                hasil = HasilRekomendasi(siswa_id=user_id, periode_id=periode.id)
+                hasil = HasilRekomendasi(siswa_id=user_id, periode_id=periode_aktif.id)
                 db.session.add(hasil)
 
-            # INI KUNCINYA: Simpan JSON lengkap pertanyaan & jawaban saat ini
             hasil.detail_snapshot = snapshot_data
+            hasil.tingkat_kelas = riwayat.tingkat_kelas
 
         db.session.commit()
         return jsonify({'msg': 'Data berhasil disimpan!'}), 200

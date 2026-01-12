@@ -52,7 +52,9 @@ def login():
             "name": user.name,
             "username": user.username,
             "role": role_str,
-            "email": user.email
+            "email": user.email,
+            "jenis_pakar": user.jenis_pakar,
+            "jurusan_id": user.jurusan_id
         }
     }), 200
 

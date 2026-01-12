@@ -1,11 +1,9 @@
 from flask import Blueprint, request, jsonify, url_for
 from flask_jwt_extended import jwt_required, get_jwt
 from sqlalchemy import or_, and_, desc, asc
-from models import db, User, HasilRekomendasi, Periode, Jurusan, RoleEnum
+from models import db, User, HasilRekomendasi, Periode, Jurusan, RoleEnum, RiwayatKelas
 
 monitoring_bp = Blueprint('monitoring', __name__)
-
-
 
 
 def paginate_response(pagination, endpoint, **kwargs):
@@ -48,6 +46,7 @@ def paginate_response(pagination, endpoint, **kwargs):
         'links': links
     }
 
+
 @monitoring_bp.route('/chart-data', methods=['GET'])
 @jwt_required()
 def get_chart_data():
@@ -80,6 +79,7 @@ def get_chart_data():
         ]
     })
 
+
 @monitoring_bp.route('/', methods=['GET'], strict_slashes=False)
 @jwt_required()
 def index():
@@ -109,7 +109,10 @@ def index():
     pagination = None
 
     if status == 'sudah':
-        # --- QUERY HASIL REKOMENDASI (Siswa yang sudah mengisi) ---
+        # --- KASUS 1: SUDAH MENGISI ---
+        # Data diambil dari tabel HasilRekomendasi
+        # Kelas diambil dari kolom 'tingkat_kelas' di tabel HasilRekomendasi (Snapshot)
+
         query = HasilRekomendasi.query.join(User).join(Jurusan, User.jurusan_id == Jurusan.id)
 
         if current_periode_id:
@@ -121,7 +124,7 @@ def index():
                 User.nisn.ilike(f'%{search}%')
             ))
 
-        # Urutkan berdasarkan nilai tertinggi
+        # Urutkan berdasarkan waktu pengisian terbaru
         pagination = query.order_by(desc(HasilRekomendasi.created_at)) \
             .paginate(page=page, per_page=10, error_out=False)
 
@@ -135,9 +138,8 @@ def index():
                         'nama_jurusan': item.siswa.jurusan.nama_jurusan if item.siswa.jurusan else '-'
                     }
                 },
-                'tingkat_kelas': item.siswa.kelas_saat_ini.value if hasattr(item.siswa.kelas_saat_ini,
-                                                                            'value') else str(
-                    item.siswa.kelas_saat_ini),
+                # Disini kita ambil dari snapshot hasil, bukan dari user
+                'tingkat_kelas': item.tingkat_kelas or '-',
                 'keputusan_terbaik': item.keputusan_terbaik,
                 'skor_studi': item.skor_studi,
                 'skor_kerja': item.skor_kerja,
@@ -146,13 +148,23 @@ def index():
             })
 
     else:
-        # --- QUERY USER SISWA (Siswa yang BELUM mengisi) ---
+        # --- KASUS 2: BELUM MENGISI ---
+        # Data diambil dari tabel User
+        # Kelas diambil dari tabel RiwayatKelas (Join berdasarkan periode)
+
         # Subquery: Ambil ID siswa yang SUDAH mengisi di periode ini
         subquery = db.session.query(HasilRekomendasi.siswa_id) \
             .filter(HasilRekomendasi.periode_id == current_periode_id)
 
-        query = User.query.filter(User.role == RoleEnum.siswa) \
-            .filter(~User.id.in_(subquery))  # NOT IN subquery
+        # Query Utama: User + Join RiwayatKelas
+        query = db.session.query(User, RiwayatKelas.tingkat_kelas) \
+            .outerjoin(RiwayatKelas, and_(
+            RiwayatKelas.siswa_id == User.id,
+            RiwayatKelas.periode_id == current_periode_id
+        )) \
+            .join(Jurusan, User.jurusan_id == Jurusan.id) \
+            .filter(User.role == RoleEnum.siswa) \
+            .filter(~User.id.in_(subquery))  # Filter NOT IN
 
         if search:
             query = query.filter(or_(
@@ -160,10 +172,12 @@ def index():
                 User.nisn.ilike(f'%{search}%')
             ))
 
+        # Pagination manual karena kita pakai session.query tuple (User, tingkat_kelas)
+        # Flask-SQLAlchemy paginate biasanya untuk Model objects, tapi bisa handle query object juga
         pagination = query.order_by(User.name.asc()) \
             .paginate(page=page, per_page=10, error_out=False)
 
-        for user in pagination.items:
+        for user, tingkat_kelas in pagination.items:
             data_items.append({
                 'id': user.id,
                 'name': user.name,
@@ -171,13 +185,12 @@ def index():
                 'jurusan': {
                     'nama_jurusan': user.jurusan.nama_jurusan if user.jurusan else '-'
                 },
-                'kelas': user.kelas_saat_ini.value if hasattr(user.kelas_saat_ini, 'value') else str(
-                    user.kelas_saat_ini),
+                # Ambil kelas dari hasil Join RiwayatKelas
+                'kelas': tingkat_kelas if tingkat_kelas else '-',
                 'status': 'Belum Mengisi'
             })
 
     # 4. Format Pagination Response
-    # Kita kirim params filter kembali agar link pagination valid
     response_results = paginate_response(pagination, 'monitoring.index', search=search, status=status,
                                          periode_id=current_periode_id)
     response_results['data'] = data_items
@@ -192,13 +205,10 @@ def index():
     })
 
 
-# --- UPDATE CATATAN (Sesuai URL Frontend) ---
+# --- UPDATE CATATAN ---
 @monitoring_bp.route('/<int:id>/catatan', methods=['POST'], strict_slashes=False)
 @jwt_required()
 def update_catatan(id):
-    """
-    id: ID dari HasilRekomendasi (bukan User ID)
-    """
     claims = get_jwt()
     if claims.get('role') not in ['admin', 'pakar']:
         return jsonify({'msg': 'Akses ditolak'}), 403

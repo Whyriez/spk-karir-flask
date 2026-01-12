@@ -9,7 +9,6 @@ import Header from "../../../components/Header.tsx";
 
 export default function PeriodeIndex() {
     const [periodes, setPeriodes] = useState<any[]>([]);
-    const [autoSetting, setAutoSetting] = useState(false);
     const [loading, setLoading] = useState(true);
 
     // Modal State
@@ -21,12 +20,9 @@ export default function PeriodeIndex() {
     // --- FETCH DATA ---
     const fetchData = async () => {
         setLoading(true)
-
         try {
             const res = await apiClient.get('/periode')
-
             setPeriodes(res.data.periodes)
-            setAutoSetting(res.data.auto_setting)
         } catch (err) {
             console.error(err)
         } finally {
@@ -34,54 +30,51 @@ export default function PeriodeIndex() {
         }
     }
 
+    useEffect(() => { fetchData(); }, []);
 
-    useEffect(() => {
-        fetchData();
-    }, []);
+    const activePeriodeId = periodes.find(p => p.is_active)?.id || 0;
 
-    // --- HANDLERS ---
-    const handleToggleAuto = async (newVal) => {
-        // optimistic UI
-        setAutoSetting(newVal)
+    // --- LOGIKA AKTIVASI & KENAIKAN KELAS ---
+    const handleActivate = async (id: number, nama: string) => {
+        let msg = "";
+
+        // Cek apakah Maju atau Mundur
+        if (id > activePeriodeId) {
+            // KASUS MAJU (Kenaikan Kelas)
+            msg = `KONFIRMASI GANTI PERIODE BARU:\n\n` +
+                  `Anda akan mengaktifkan "${nama}".\n` +
+                  `Sistem akan otomatis memproses KENAIKAN KELAS dari periode sebelumnya.\n` +
+                  `Pastikan data periode sebelumnya sudah final.\n\n` +
+                  `Lanjutkan?`;
+        } else {
+            // KASUS MUNDUR (Hanya Switch)
+            msg = `KONFIRMASI MUNDUR PERIODE:\n\n` +
+                  `Anda akan kembali ke periode lampau "${nama}".\n` +
+                  `Sistem TIDAK AKAN memproses kenaikan kelas (hanya pindah status aktif).\n` +
+                  `Gunakan ini hanya untuk melihat/memperbaiki data lama.\n\n` +
+                  `Lanjutkan?`;
+        }
+
+        if (!window.confirm(msg)) return;
 
         try {
-            await apiClient.post('/periode/toggle-auto', {active: newVal})
-            fetchData()
-        } catch (err) {
-            alert('Gagal mengubah setting')
-            fetchData() // rollback UI
+            const res = await apiClient.post(`/periode/${id}/activate`);
+            alert(res.data.msg);
+            fetchData();
+        } catch (err: any) {
+            alert(err.response?.data?.msg || 'Gagal mengaktifkan periode');
         }
     }
 
-
-    const handleActivate = async (id) => {
-        if (!confirm('Aktifkan periode ini? Periode lain akan dinonaktifkan.')) return
-
-        try {
-            await apiClient.post(`/periode/${id}/activate`)
-            alert('Periode berhasil diaktifkan!')
-            fetchData()
-        } catch (err) {
-            alert('Gagal mengaktifkan periode')
-        }
-    }
-
-
-    const handleDelete = async (id) => {
-        if (!confirm('Yakin hapus periode ini? Data history terkait mungkin akan hilang.')) return
-
+    const handleDelete = async (id: number) => {
+        if (!confirm('Yakin hapus periode ini? Data history terkait akan hilang.')) return
         try {
             await apiClient.delete(`/periode/${id}`)
             fetchData()
-        } catch (err) {
-            if (err.response?.data?.msg) {
-                alert(err.response.data.msg)
-            } else {
-                alert('Gagal menghapus')
-            }
+        } catch (err: any) {
+            alert(err.response?.data?.msg || 'Gagal menghapus')
         }
     }
-
 
     const openModal = (item?: any) => {
         setFormName(item ? item.nama_periode : '');
@@ -89,29 +82,19 @@ export default function PeriodeIndex() {
         setShowModal(true);
     };
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setProcessing(true)
-
         try {
             if (editingId) {
-                await apiClient.put(`/periode/${editingId}`, {
-                    nama_periode: formName
-                })
+                await apiClient.put(`/periode/${editingId}`, { nama_periode: formName })
             } else {
-                await apiClient.post('/periode', {
-                    nama_periode: formName
-                })
+                await apiClient.post('/periode', { nama_periode: formName })
             }
-
             setShowModal(false)
             fetchData()
         } catch (err) {
-            if (err.response?.data?.msg) {
-                alert(err.response.data.msg)
-            } else {
-                alert('Gagal menyimpan periode')
-            }
+            alert('Gagal menyimpan periode')
         } finally {
             setProcessing(false)
         }
@@ -120,35 +103,22 @@ export default function PeriodeIndex() {
     return (
         <div>
              <Header>
-               <h2 className="font-semibold text-xl text-gray-800">Manajemen Periode</h2>
+               <h2 className="font-semibold text-xl text-gray-800">Manajemen Periode & Tahun Ajaran</h2>
             </Header>
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
-                    {/* CARD PENGATURAN AUTO */}
-                    <div className="bg-white p-6 rounded-lg shadow-sm flex items-center justify-between">
-                        <div>
-                            <h3 className="text-lg font-medium text-gray-900">Otomatisasi Periode</h3>
-                            <p className="text-sm text-gray-500">Jika aktif, sistem akan otomatis membuat periode baru
-                                setiap tanggal 1 Juli.</p>
-                        </div>
-                        <div className="flex items-center">
-                            <label className="relative inline-flex items-center cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    className="sr-only peer"
-                                    checked={autoSetting}
-                                    onChange={(e) => handleToggleAuto(e.target.checked)}
-                                />
-                                <div
-                                    className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                                <span
-                                    className="ml-3 text-sm font-medium text-gray-900">{autoSetting ? 'Aktif' : 'Nonaktif'}</span>
-                            </label>
+                    {/* INFO CARD */}
+                    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 shadow-sm">
+                        <div className="flex">
+                            <div className="ml-3">
+                                <p className="text-sm text-blue-700">
+                                    <strong>Info Kenaikan Kelas:</strong> Mengaktifkan periode baru akan otomatis memicu proses kenaikan kelas untuk seluruh siswa dari periode sebelumnya.
+                                </p>
+                            </div>
                         </div>
                     </div>
 
-                    {/* CARD TABEL DATA */}
                     <div className="bg-white p-6 rounded-lg shadow-sm">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-lg font-bold text-gray-800">Daftar Tahun Ajaran</h3>
@@ -159,34 +129,29 @@ export default function PeriodeIndex() {
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nama
-                                        Periode
-                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nama Periode</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data
-                                        Siswa
-                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data Siswa Terdaftar</th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Aksi</th>
                                 </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
                                 {periodes.map((item) => (
-                                    <tr key={item.id} className={item.is_active ? 'bg-indigo-50' : ''}>
+                                    <tr key={item.id} className={item.is_active ? 'bg-green-50' : ''}>
                                         <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
                                             {item.nama_periode}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             {item.is_active ? (
-                                                <span
-                                                    className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                                        Aktif (Sedang Berjalan)
-                                                    </span>
+                                                <span className="px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full bg-green-100 text-green-800 border border-green-200">
+                                                    AKTIF SEKARANG
+                                                </span>
                                             ) : (
                                                 <button
-                                                    onClick={() => handleActivate(item.id)}
-                                                    className="text-xs text-indigo-600 hover:text-indigo-900 underline"
+                                                    onClick={() => handleActivate(item.id, item.nama_periode)}
+                                                    className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none"
                                                 >
-                                                    Set Aktif
+                                                    Aktifkan & Migrasi
                                                 </button>
                                             )}
                                         </td>
@@ -194,12 +159,9 @@ export default function PeriodeIndex() {
                                             {item.jumlah_siswa} Siswa
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button onClick={() => openModal(item)}
-                                                    className="text-indigo-600 hover:text-indigo-900 mr-3">Edit
-                                            </button>
+                                            <button onClick={() => openModal(item)} className="text-indigo-600 hover:text-indigo-900 mr-3">Edit</button>
                                             {!item.is_active && (
-                                                <button onClick={() => handleDelete(item.id)}
-                                                        className="text-red-600 hover:text-red-900">Hapus</button>
+                                                <button onClick={() => handleDelete(item.id)} className="text-red-600 hover:text-red-900">Hapus</button>
                                             )}
                                         </td>
                                     </tr>
@@ -217,7 +179,6 @@ export default function PeriodeIndex() {
                     <h2 className="text-lg font-medium text-gray-900 mb-4">
                         {editingId ? 'Edit Periode' : 'Tambah Periode Baru'}
                     </h2>
-
                     <div className="mb-4">
                         <InputLabel value="Nama Periode"/>
                         <TextInput
@@ -228,7 +189,6 @@ export default function PeriodeIndex() {
                             autoFocus
                         />
                     </div>
-
                     <div className="flex justify-end gap-2">
                         <SecondaryButton type="button" onClick={() => setShowModal(false)}>Batal</SecondaryButton>
                         <PrimaryButton disabled={processing}>Simpan</PrimaryButton>

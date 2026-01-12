@@ -74,7 +74,6 @@ class User(db.Model):
 
     # Enum types
     role = db.Column(db.Enum(RoleEnum), default=RoleEnum.siswa, nullable=False)
-    kelas_saat_ini = db.Column(db.String(20), nullable=True)
 
     # --- MISSING FIELDS ADDED ---
     jenis_pakar = db.Column(db.String(255), nullable=True)  # Untuk role pakar
@@ -90,6 +89,31 @@ class User(db.Model):
     # Setup relasi ke Jurusan
     jurusan = db.relationship('Jurusan', backref='users')
 
+
+class RiwayatKelas(db.Model):
+    __tablename__ = 'riwayat_kelas'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Kunci Utama: Siapa, Kapan, Dimana
+    siswa_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    periode_id = db.Column(db.Integer, db.ForeignKey('periodes.id', ondelete='CASCADE'), nullable=False)
+
+    # Data Snapshot (Penting disimpan lagi disini agar historisnya statis)
+    tingkat_kelas = db.Column(db.String(20), nullable=False)  # '10', '11', '12'
+    jurusan_id = db.Column(db.Integer, db.ForeignKey('jurusan.id'), nullable=True)
+
+    # Status Akhir di Periode Ini (Untuk Kenaikan Kelas nanti)
+    # Values: 'Aktif', 'Naik Kelas', 'Tinggal Kelas', 'Lulus', 'Keluar'
+    status_akhir = db.Column(db.String(50), default='Aktif', nullable=False)
+
+    created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
+    updated_at = db.Column(db.DateTime(timezone=True), onupdate=func.now())
+
+    # Relasi
+    siswa = db.relationship('User', backref='riwayat_pendidikan')
+    periode = db.relationship('Periode', backref='data_kelas')
+    jurusan = db.relationship('Jurusan')
 
 class Kriteria(db.Model):
     __tablename__ = 'kriteria'

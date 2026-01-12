@@ -5,8 +5,12 @@ import apiClient from '@/lib/axios';
 import {useOutletContext} from "react-router-dom";
 import type {LayoutContextType} from "../../interface/layout.ts";
 import Header from "../../components/Header.tsx";
+import { useLayout } from '@/contexts/LayoutContext'; // <--- IMPORT CONTEXT
 
 export default function Settings() {
+    // Ambil fungsi refreshSettings dari context
+    const { refreshSettings } = useLayout();
+
     // State form sesuai dengan field di Laravel
     const [data, setData] = useState({
         nama_sekolah: "",
@@ -18,7 +22,7 @@ export default function Settings() {
     const [processing, setProcessing] = useState(false);
     const [loading, setLoading] = useState(true);
 
-    // Fetch data saat component dimuat (pengganti props controller Laravel)
+    // Fetch data saat component dimuat
     useEffect(() => {
         apiClient.get('/settings')
             .then(res => {
@@ -37,6 +41,10 @@ export default function Settings() {
 
         try {
             await apiClient.post('/settings', data);
+
+            // UPDATE NAVBAR SETELAH SUKSES
+            refreshSettings();
+
             alert("Pengaturan berhasil disimpan!");
         } catch (error) {
             console.error(error);

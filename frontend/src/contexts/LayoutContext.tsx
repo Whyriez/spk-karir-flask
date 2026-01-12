@@ -12,6 +12,7 @@ interface LayoutContextType {
     user: User | null;
     isLoaded: boolean;
     refreshUser: () => void;
+    refreshSettings: () => void; // <--- FUNGSI BARU
 }
 
 const LayoutContext = createContext<LayoutContextType | undefined>(undefined);
@@ -23,7 +24,9 @@ export function LayoutProvider({children}: { children: ReactNode }) {
         const userString = localStorage.getItem('user');
         return userString ? JSON.parse(userString) : null;
     });
-    const hasFetched = useRef(false);
+
+    // Kita hapus hasFetched ref agar fetchSettings bisa dipanggil ulang kapan saja
+    // const hasFetched = useRef(false);
 
     // Method untuk refresh user dari localStorage
     const refreshUser = useCallback(() => {
@@ -32,35 +35,28 @@ export function LayoutProvider({children}: { children: ReactNode }) {
         setUser(newUser);
     }, []);
 
-    // Fetch settings HANYA SEKALI
-    useEffect(() => {
-        if (hasFetched.current) return;
-        hasFetched.current = true;
-
-        let mounted = true;
-
+    // Method untuk fetch settings (Dipisahkan agar bisa dipanggil ulang)
+    const refreshSettings = useCallback(() => {
         apiClient.get('/settings')
             .then(res => {
-                if (mounted && res.data.nama_sekolah) {
+                if (res.data.nama_sekolah) {
                     setSchoolName(res.data.nama_sekolah);
-                    console.log('✅ School name loaded:', res.data.nama_sekolah);
+                    console.log('✅ School name updated:', res.data.nama_sekolah);
                 }
             })
             .catch(err => console.error("❌ Gagal memuat pengaturan sekolah", err))
             .finally(() => {
-                if (mounted) {
-                    setIsLoaded(true);
-                    console.log('✅ Layout context ready');
-                }
+                setIsLoaded(true);
             });
-
-        return () => {
-            mounted = false;
-        };
     }, []);
 
+    // Fetch settings saat pertama kali mount
+    useEffect(() => {
+        refreshSettings();
+    }, [refreshSettings]);
+
     return (
-        <LayoutContext.Provider value={{schoolName, user, isLoaded, refreshUser}}>
+        <LayoutContext.Provider value={{schoolName, user, isLoaded, refreshUser, refreshSettings}}>
             {children}
         </LayoutContext.Provider>
     );

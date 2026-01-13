@@ -1,4 +1,5 @@
-import React, {useState, FormEventHandler, useEffect} from 'react';
+import {useState, useEffect} from 'react';
+import type {FormEventHandler} from 'react';
 import Checkbox from '../components/Checkbox';
 import InputLabel from '../components/InputLabel';
 import PrimaryButton from '../components/PrimaryButton';

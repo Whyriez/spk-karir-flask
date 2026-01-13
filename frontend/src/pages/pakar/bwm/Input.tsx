@@ -19,14 +19,6 @@ const Toast = Swal.mixin({
     }
 });
 
-interface User {
-    id: number;
-    name: string;
-    role: string;
-    jenis_pakar?: string;
-    jurusan_id?: number | null;
-}
-
 interface Kriteria {
     id: number;
     kode: string;
@@ -48,8 +40,6 @@ export default function BwmInput() {
 
     // Consistency Ratio State
     const [crValue, setCrValue] = useState<number | null>(null);
-
-    const user: User = JSON.parse(localStorage.getItem('user') || '{}');
 
     // Fetch Initial Data
     useEffect(() => {

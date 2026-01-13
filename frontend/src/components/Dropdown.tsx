@@ -1,4 +1,4 @@
-import { useState, createContext, useContext, Fragment, PropsWithChildren } from 'react';
+import { useState, createContext, useContext, Fragment, type PropsWithChildren } from 'react';
 import { Link } from 'react-router-dom';
 import { Transition } from '@headlessui/react';
 

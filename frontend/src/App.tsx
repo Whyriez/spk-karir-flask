@@ -1,21 +1,21 @@
-import React, {JSX} from 'react';
+import type {JSX} from 'react';
 import {BrowserRouter as Router, Routes, Route, Navigate, useLocation} from 'react-router-dom';
 import {LayoutProvider} from '@/contexts/LayoutContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 
 // Admin Pages
-import KriteriaIndex from "./pages/admin/kriteria/Index";
-import PeriodeIndex from "./pages/admin/periode/Index";
-import JurusanIndex from "./pages/admin/jurusan/Index";
-import AlumniIndex from "./pages/admin/alumni/Index";
-import MonitoringIndex from "./pages/admin/monitoring/Index";
+import KriteriaIndex from "./pages/admin/kriteria/index";
+import PeriodeIndex from "./pages/admin/periode";
+import JurusanIndex from "./pages/admin/jurusan/index";
+import AlumniIndex from "./pages/admin/alumni/index";
+import MonitoringIndex from "./pages/admin/monitoring";
 import Settings from "./pages/admin/Settings";
 import AdminSiswaIndex from "./pages/admin/siswa";
 
 // Pakar Pages
-import BwmInput from './pages/pakar/bwm/Input';
-import KriteriaPakar from './pages/pakar/kriteria/Input';
+import BwmInput from './pages/pakar/bwm/input';
+import KriteriaPakar from './pages/pakar/kriteria/input';
 import JurusanPakarIndex from "./pages/pakar/jurusan";
 
 // Siswa Pages

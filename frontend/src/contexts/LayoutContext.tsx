@@ -1,10 +1,12 @@
-import {createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback} from 'react';
+import {createContext, useContext, useState, useEffect, useCallback} from 'react';
+import type {ReactNode} from 'react';
 import apiClient from '@/lib/axios';
 
 interface User {
     name: string;
     role: string;
     email?: string;
+    jenis_pakar: string;
 }
 
 interface LayoutContextType {

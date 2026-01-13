@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import Header from "../../../components/Header.tsx";
 import PrimaryButton from '@/components/PrimaryButton';
 import apiClient from '@/lib/axios';

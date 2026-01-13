@@ -1,4 +1,5 @@
-import React, { useEffect, useState, FormEvent } from 'react';
+import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import Header from '@/components/Header';
 import Modal from '@/components/Modal';
 import PrimaryButton from '@/components/PrimaryButton';

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import Modal from '@/components/Modal';
 import SecondaryButton from '@/components/SecondaryButton';

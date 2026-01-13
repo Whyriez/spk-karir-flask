@@ -1,5 +1,5 @@
-import React, {useEffect, useState, FormEvent} from 'react';
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import {useEffect, useState} from 'react';
+import type {FormEvent} from 'react';
 import Modal from '@/components/Modal';
 import SecondaryButton from '@/components/SecondaryButton';
 import PrimaryButton from '@/components/PrimaryButton';

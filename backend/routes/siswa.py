@@ -97,54 +97,39 @@ def get_form():
 def save_nilai():
     user_id = get_jwt_identity()
 
-    # --- VALIDASI STATUS SISWA (BARU) ---
+    # 1. Validasi Periode & Status Siswa
     periode_aktif = Periode.query.filter_by(is_active=True).first()
     if not periode_aktif:
         return jsonify({'msg': 'Tidak ada periode tahun ajaran yang aktif.'}), 400
 
-    # Cek apakah siswa terdaftar & aktif di periode ini?
     riwayat = RiwayatKelas.query.filter_by(
         siswa_id=user_id,
         periode_id=periode_aktif.id,
-        status_akhir='Aktif'  # Hanya yang statusnya Aktif yang boleh input
+        status_akhir='Aktif'
     ).first()
 
     if not riwayat:
-        # Cek apakah dia alumni (Lulus di periode sebelumnya)
-        # Atau memang belum didaftarkan admin
-        return jsonify({
-            'msg': 'Akses ditolak. Anda tidak terdaftar sebagai siswa aktif pada periode ini atau sudah dinyatakan Lulus.'
-        }), 403
-    # ------------------------------------
+        return jsonify({'msg': 'Akses ditolak. Anda tidak terdaftar aktif.'}), 403
 
+    # 2. Proses Input Data
     data = request.get_json()
     values = data.get('values', {})
-
     temp_scores = {}
     snapshot_data = []
 
-    # if not input_values:
-    #     return jsonify({'msg': 'Tidak ada data yang dikirim'}), 400
-
     try:
-        # Kita gunakan strategi "Delete All Insert New" atau "Update or Create"
-        # Agar simpel dan aman, kita loop update/insert
-
+        # A. Loop Input & Simpan ke NilaiSiswa
         for key, val in values.items():
-            # Frontend disarankan mengirim ID pertanyaan sebagai key, misal "p_12" atau angka 12
-            # Jika key adalah ID Pertanyaan (int)
             try:
                 p_id = int(key)
                 pertanyaan = Pertanyaan.query.get(p_id)
                 if pertanyaan:
                     k_id = pertanyaan.kriteria_id
+                    if k_id not in temp_scores: temp_scores[k_id] = []
 
-                    # Masukkan ke temp list untuk dirata-rata
-                    if k_id not in temp_scores:
-                        temp_scores[k_id] = []
-                    temp_scores[k_id].append(float(val))
+                    val_float = float(val) if val else 0
+                    temp_scores[k_id].append(val_float)
 
-                    # Siapkan Snapshot Data (PENTING UNTUK RIWAYAT)
                     snapshot_data.append({
                         'kriteria_kode': pertanyaan.kriteria.kode,
                         'kriteria_nama': pertanyaan.kriteria.nama,
@@ -156,26 +141,47 @@ def save_nilai():
 
         for k_id, scores in temp_scores.items():
             avg_score = sum(scores) / len(scores)
-
             nilai_obj = NilaiSiswa.query.filter_by(siswa_id=user_id, kriteria_id=k_id).first()
             if not nilai_obj:
                 nilai_obj = NilaiSiswa(siswa_id=user_id, kriteria_id=k_id)
                 db.session.add(nilai_obj)
-
             nilai_obj.nilai_input = avg_score
 
-        if periode_aktif:
-            hasil = HasilRekomendasi.query.filter_by(siswa_id=user_id, periode_id=periode_aktif.id).first()
-            if not hasil:
-                hasil = HasilRekomendasi(siswa_id=user_id, periode_id=periode_aktif.id)
-                db.session.add(hasil)
+        # B. Buat Placeholder Hasil (Agar tidak error NOT NULL sebelum hitung)
+        hasil = HasilRekomendasi.query.filter_by(siswa_id=user_id, periode_id=periode_aktif.id).first()
+        if not hasil:
+            hasil = HasilRekomendasi(
+                siswa_id=user_id,
+                periode_id=periode_aktif.id,
+                keputusan_terbaik="Sedang Menghitung...",  # Placeholder sementara
+                tingkat_kelas=riwayat.tingkat_kelas
+            )
+            db.session.add(hasil)
 
-            hasil.detail_snapshot = snapshot_data
-            hasil.tingkat_kelas = riwayat.tingkat_kelas
+        # Simpan Snapshot Jawaban (History apa yang diisi user)
+        hasil.detail_snapshot = snapshot_data
+        hasil.tingkat_kelas = riwayat.tingkat_kelas
 
+        # COMMIT 1: Simpan Input Mentah & Placeholder dulu
         db.session.commit()
-        return jsonify({'msg': 'Data berhasil disimpan!'}), 200
+
+        # -----------------------------------------------------------------
+        # C. TRIGGER PERHITUNGAN MOORA OTOMATIS
+        # -----------------------------------------------------------------
+        # Import lokal untuk menghindari circular import
+        from routes.moora import calculate_ranking
+
+        # Jalankan perhitungan (ini akan update tabel HasilRekomendasi dengan skor real)
+        calculated_result, error_msg = calculate_ranking(periode_aktif.id, user_id)
+
+        if error_msg:
+            print(f"Warning Hitung Otomatis: {error_msg}")
+            # Kita tidak return error 500 karena data input sudah tersimpan.
+            # User tetap dapat notif sukses, tapi hasil mungkin belum keluar sempurna.
+
+        return jsonify({'msg': 'Data berhasil disimpan & dikalkulasi!'}), 200
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'msg': 'Gagal menyimpan: ' + str(e)}), 500
+        print(f"ERROR SAVE: {e}")
+        return jsonify({'msg': f'Gagal menyimpan: {str(e)}'}), 500

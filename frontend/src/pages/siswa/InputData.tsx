@@ -1,9 +1,27 @@
-import React, {useEffect, useState, FormEvent} from 'react';
-import {useNavigate} from 'react-router-dom';
+import React, { useEffect, useState, FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import apiClient from '@/lib/axios';
 import Header from "../../components/Header.tsx";
+import Swal from 'sweetalert2';
+import withReactContent from 'sweetalert2-react-content';
 
-// Tipe Data
+// --- KONFIGURASI SWEETALERT ---
+const MySwal = withReactContent(Swal);
+
+// Konfigurasi Toast (Notifikasi kecil di pojok kanan atas)
+const Toast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+    didOpen: (toast) => {
+        toast.onmouseenter = Swal.stopTimer;
+        toast.onmouseleave = Swal.resumeTimer;
+    }
+});
+
+// --- TIPE DATA ---
 interface PertanyaanItem {
     id: number;
     teks: string;
@@ -18,9 +36,8 @@ interface KriteriaItem {
     kategori: string;
     opsi_pilihan?: { val: string | number; label: string }[];
     value?: string | number;
-    skala_maks: number; // <--- DITAMBAHKAN
+    skala_maks: number;
 }
-
 
 export default function InputDataSiswa() {
     const [kriterias, setKriterias] = useState<KriteriaItem[]>([]);
@@ -49,6 +66,11 @@ export default function InputDataSiswa() {
                 setKriterias(response.data.data);
             } catch (error) {
                 console.error("Gagal memuat form:", error);
+                Toast.fire({
+                    icon: 'error',
+                    title: 'Gagal memuat form',
+                    text: 'Periksa koneksi internet Anda.'
+                });
             } finally {
                 setLoading(false);
             }
@@ -56,6 +78,7 @@ export default function InputDataSiswa() {
         fetchData();
     }, []);
 
+    // JIKA TIDAK ELIGIBLE (SUDAH ISI / AKUN DIKUNCI)
     if (!isEligible) {
         return (
             <>
@@ -104,9 +127,13 @@ export default function InputDataSiswa() {
                 return;
             }
 
-            // Jika melebihi batas, tolak input (jangan update state)
+            // Jika melebihi batas, tolak input & kasih warning Toast
             if (!isNaN(numVal) && numVal > maxVal) {
-                // Opsional: alert(`Nilai maksimal adalah ${maxVal}`);
+                Toast.fire({
+                    icon: 'warning',
+                    title: 'Melebihi Batas',
+                    text: `Nilai maksimal untuk isian ini adalah ${maxVal}`
+                });
                 return;
             }
 
@@ -119,15 +146,45 @@ export default function InputDataSiswa() {
 
     const submit = async (e: FormEvent) => {
         e.preventDefault();
+
+        // Konfirmasi sebelum submit (Opsional, agar user yakin)
+        const result = await MySwal.fire({
+            title: 'Simpan Data?',
+            text: "Pastikan semua data sudah terisi dengan benar.",
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#4f46e5', // Indigo-600
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Ya, Simpan',
+            cancelButtonText: 'Batal'
+        });
+
+        if (!result.isConfirmed) return;
+
         setProcessing(true);
 
         try {
             await apiClient.post('/siswa/save', {values});
-            alert('Data berhasil disimpan!');
+
+            await MySwal.fire({
+                icon: 'success',
+                title: 'Berhasil!',
+                text: 'Data siswa berhasil disimpan.',
+                timer: 2000,
+                showConfirmButton: false
+            });
+
             navigate('/siswa/result');
-        } catch (error) {
+
+        } catch (error: any) {
             console.error(error);
-            alert('Gagal menyimpan data.');
+            const errMsg = error.response?.data?.message || 'Terjadi kesalahan saat menyimpan data.';
+
+            MySwal.fire({
+                icon: 'error',
+                title: 'Gagal',
+                text: errMsg
+            });
         } finally {
             setProcessing(false);
         }
@@ -225,7 +282,10 @@ export default function InputDataSiswa() {
         return (
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                    <div className="bg-white p-10 text-center text-gray-500">Memuat formulir...</div>
+                    <div className="bg-white p-10 text-center text-gray-500 flex flex-col items-center justify-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-2"></div>
+                        Memuat formulir...
+                    </div>
                 </div>
             </div>
         );
@@ -240,7 +300,7 @@ export default function InputDataSiswa() {
                 <div className="max-w-5xl mx-auto sm:px-6 lg:px-8">
                     <form onSubmit={submit} className="space-y-8">
 
-                        {/* BAGIAN 1: Data Akademik & Ekonomi (Dengan Info Box di Kanan) */}
+                        {/* BAGIAN 1: Data Akademik & Ekonomi */}
                         {listAkademik.length > 0 && (
                             <div className="bg-white p-6 shadow-sm rounded-lg border-l-4 border-blue-500">
                                 <div className="flex flex-col md:flex-row gap-8">
@@ -255,7 +315,7 @@ export default function InputDataSiswa() {
                                                     {/* Header Kriteria */}
                                                     <div className="font-semibold text-gray-800 mb-2">{k.kode} - {k.nama}</div>
 
-                                                    {/* Loop Pertanyaan Akademik dengan Index */}
+                                                    {/* Loop Pertanyaan Akademik */}
                                                     {k.list_pertanyaan && k.list_pertanyaan.length > 0 ? (
                                                         k.list_pertanyaan.map((p, index) => (
                                                             <div key={p.id} className="mb-3">
@@ -356,8 +416,20 @@ export default function InputDataSiswa() {
                         )}
 
                         <div className="flex justify-end pt-4 pb-10">
-                            <button type="submit" disabled={processing} className="bg-indigo-600 text-white px-8 py-3 rounded-lg font-semibold shadow-lg hover:bg-indigo-700">
-                                {processing ? 'Menyimpan...' : 'Simpan Data'}
+                            <button
+                                type="submit"
+                                disabled={processing}
+                                className="inline-flex items-center px-8 py-3 bg-indigo-600 border border-transparent rounded-lg font-semibold text-white shadow-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition ease-in-out duration-150"
+                            >
+                                {processing ? (
+                                    <>
+                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        Menyimpan...
+                                    </>
+                                ) : 'Simpan Data'}
                             </button>
                         </div>
 

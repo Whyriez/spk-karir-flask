@@ -1,12 +1,29 @@
-import React, {useEffect, useState} from 'react';
-import PrimaryButton from '../../../components/PrimaryButton';
-import SecondaryButton from '../../../components/SecondaryButton';
-import Modal from '../../../components/Modal';
-import TextInput from '../../../components/TextInput';
-import InputLabel from '../../../components/InputLabel';
-import apiClient from "../../../lib/axios.ts";
-import Header from "../../../components/Header.tsx";
+import React, { useEffect, useState, FormEvent } from 'react';
+import PrimaryButton from '@/components/PrimaryButton';
+import SecondaryButton from '@/components/SecondaryButton';
+import Modal from '@/components/Modal';
+import TextInput from '@/components/TextInput';
+import InputLabel from '@/components/InputLabel';
+import apiClient from "@/lib/axios";
+import Header from "@/components/Header";
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2';
+import withReactContent from 'sweetalert2-react-content';
+
+const MySwal = withReactContent(Swal);
+
+// --- KONFIGURASI SWEETALERT ---
+const Toast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+    didOpen: (toast) => {
+        toast.onmouseenter = Swal.stopTimer;
+        toast.onmouseleave = Swal.resumeTimer;
+    }
+});
 
 // Tipe Data Sederhana
 interface Jurusan {
@@ -41,8 +58,15 @@ export default function JurusanPakarIndex() {
     // Proteksi Akses: Hanya untuk Kaprodi
     useEffect(() => {
         if (user.role === 'pakar' && user.jenis_pakar !== 'kaprodi') {
-            alert("Akses Ditolak: Halaman ini hanya untuk Kaprodi.");
-            navigate('/dashboard');
+            MySwal.fire({
+                icon: 'error',
+                title: 'Akses Ditolak',
+                text: 'Halaman ini hanya untuk Kaprodi.',
+                timer: 2000,
+                showConfirmButton: false
+            }).then(() => {
+                navigate('/dashboard');
+            });
         }
     }, [user, navigate]);
 
@@ -54,6 +78,7 @@ export default function JurusanPakarIndex() {
             setData(res.data.data);
         } catch (err) {
             console.error(err);
+            Toast.fire({ icon: 'error', title: 'Gagal memuat data jurusan.' });
         } finally {
             setLoading(false);
         }
@@ -74,12 +99,13 @@ export default function JurusanPakarIndex() {
         setStaticItems([]);
         setShowStaticModal(true);
 
+        // Show loading in modal content if needed, or rely on empty state
         try {
             const res = await apiClient.get(`/jurusan/${item.id}/static-values`);
             setStaticItems(res.data.values);
         } catch (error) {
             console.error(error);
-            alert("Gagal mengambil data statis.");
+            Toast.fire({ icon: 'error', title: 'Gagal mengambil data statis.' });
             setShowStaticModal(false);
         }
     };
@@ -101,8 +127,8 @@ export default function JurusanPakarIndex() {
         // Jika angka valid DAN melebihi batas maksimal -> TOLAK PERUBAHAN
         // Input tidak akan berubah (tetap angka sebelumnya)
         if (!isNaN(numVal) && numVal > maxVal) {
-            // Opsional: Beri efek visual atau alert jika diperlukan
-            // alert(`Nilai tidak boleh melebihi ${maxVal}`);
+            // Optional: Toast warning kecil agar user sadar
+            // Toast.fire({ icon: 'warning', title: `Maksimal nilai adalah ${maxVal}` });
             return;
         }
 
@@ -112,26 +138,27 @@ export default function JurusanPakarIndex() {
         }
 
         // Update state jika lolos validasi
-        // Kita simpan sebagai string sementara jika diakhiri titik (untuk desimal)
-        // atau simpan sebagai number jika valid
         newItems[index].nilai = val.endsWith('.') ? val : numVal;
-
         setStaticItems(newItems);
     };
 
-    const handleStaticSubmit = async (e: React.FormEvent) => {
+    const handleStaticSubmit = async (e: FormEvent) => {
         e.preventDefault();
         if (!selectedJurusan) return;
 
         // VALIDASI AKHIR SEBELUM KIRIM
-        // Pastikan tidak ada nilai yang melebihi batas (double check)
         const invalidItems = staticItems.filter(item => {
             const val = Number(item.nilai);
             return val > item.skala_maks || val < 0;
         });
 
         if (invalidItems.length > 0) {
-            alert(`Gagal Simpan: Ada nilai yang tidak valid (melebihi skala maksimal).\nPeriksa kriteria: ${invalidItems.map(i => i.kode).join(', ')}`);
+            const kodeList = invalidItems.map(i => i.kode).join(', ');
+            MySwal.fire({
+                icon: 'error',
+                title: 'Nilai Tidak Valid',
+                text: `Kriteria berikut melebihi skala maksimal: ${kodeList}`,
+            });
             return;
         }
 
@@ -147,11 +174,19 @@ export default function JurusanPakarIndex() {
             await apiClient.post(`/jurusan/${selectedJurusan.id}/static-values`, {
                 items: payloadItems
             });
-            alert("Data statis berhasil disimpan!");
+
+            Toast.fire({
+                icon: 'success',
+                title: 'Data statis berhasil disimpan!'
+            });
             setShowStaticModal(false);
         } catch (error) {
             console.error(error);
-            alert("Gagal menyimpan data statis.");
+            MySwal.fire({
+                icon: 'error',
+                title: 'Gagal Menyimpan',
+                text: 'Terjadi kesalahan saat menyimpan data ke server.'
+            });
         } finally {
             setProcessing(false);
         }
@@ -171,8 +206,13 @@ export default function JurusanPakarIndex() {
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
 
                     {/* INFO BOX */}
-                    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 shadow-sm">
+                    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6 shadow-sm rounded-r-md">
                         <div className="flex">
+                            <div className="flex-shrink-0">
+                                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                            </div>
                             <div className="ml-3">
                                 <p className="text-sm text-blue-700">
                                     <strong>Area Pakar Kaprodi:</strong> Data di bawah adalah jurusan yang Anda ampu. Silakan kelola nilai kriteria statisnya.
@@ -194,20 +234,24 @@ export default function JurusanPakarIndex() {
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
                                     {loading ? (
-                                        <tr><td colSpan={3} className="p-4 text-center">Memuat data jurusan Anda...</td></tr>
+                                        <tr><td colSpan={3} className="p-8 text-center text-gray-500">Memuat data jurusan Anda...</td></tr>
                                     ) : data.length === 0 ? (
-                                        <tr><td colSpan={3} className="p-6 text-center text-gray-500">
-                                            Anda belum ditautkan ke jurusan manapun. Hubungi Admin.
+                                        <tr><td colSpan={3} className="p-8 text-center text-gray-500 bg-gray-50 rounded italic">
+                                            Anda belum ditautkan ke jurusan manapun. Silakan hubungi Admin.
                                         </td></tr>
                                     ) : (
                                         data.map((item) => (
-                                            <tr key={item.id} className="hover:bg-gray-50">
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{item.kode}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{item.nama}</td>
+                                            <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                                                        {item.kode}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{item.nama}</td>
                                                 <td className="px-6 py-4 text-right">
                                                     <button
                                                         onClick={() => openStaticModal(item)}
-                                                        className="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150"
+                                                        className="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 focus:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150 shadow-sm"
                                                     >
                                                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                                         Input Nilai
@@ -226,55 +270,65 @@ export default function JurusanPakarIndex() {
 
             {/* MODAL STATIC DATA JURUSAN */}
             <Modal show={showStaticModal} onClose={() => setShowStaticModal(false)} maxWidth="lg">
-                <form onSubmit={handleStaticSubmit} className="p-6">
-                    <div className="flex items-center justify-between mb-4 pb-2 border-b">
+                <form onSubmit={handleStaticSubmit} className="flex flex-col max-h-[85vh]">
+
+                    {/* Header Modal */}
+                    <div className="flex-none px-6 py-4 border-b bg-white flex justify-between items-center">
                         <h2 className="text-lg font-bold text-gray-900">
                             Input Nilai: <span className="text-indigo-600">{selectedJurusan?.nama}</span>
                         </h2>
-                        <span className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-500">
+                        <span className="text-xs font-mono font-bold bg-gray-100 px-2 py-1 rounded text-gray-600 border">
                             {selectedJurusan?.kode}
                         </span>
                     </div>
 
-                    <div className="mb-6 max-h-[60vh] overflow-y-auto pr-2 space-y-4">
+                    {/* Content Scrollable */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4">
                         {staticItems.length === 0 ? (
-                            <div className="text-center py-8 bg-gray-50 rounded border border-dashed text-gray-500 italic">
+                            <div className="text-center py-8 bg-gray-50 rounded border border-dashed border-gray-300 text-gray-500 italic">
+                                <svg className="mx-auto h-12 w-12 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
                                 Tidak ada kriteria bertipe "Static Jurusan" yang ditemukan.
                                 <br/>
                                 <small>Silakan hubungi Admin untuk menambahkan kriteria.</small>
                             </div>
                         ) : (
                             staticItems.map((item, index) => (
-                                <div key={item.kriteria_id}>
-                                    <InputLabel value={`${item.kode} - ${item.nama}`} className="mb-1" />
-                                    <div className="flex items-center gap-2">
+                                <div key={item.kriteria_id} className="group">
+                                    <div className="flex justify-between items-end mb-1">
+                                        <InputLabel value={`${item.kode} - ${item.nama}`} className="text-gray-700" />
+                                        <span className="text-[10px] text-gray-400 group-hover:text-indigo-500 transition-colors">
+                                            Skala Maks: <b>{item.skala_maks}</b>
+                                        </span>
+                                    </div>
+                                    <div className="relative">
                                         <TextInput
                                             type="number"
                                             value={item.nilai}
                                             onChange={(e) => handleStaticChange(index, e.target.value)}
-                                            className="w-full"
+                                            className="w-full pl-3 pr-16 font-bold text-gray-800"
                                             placeholder="0"
-                                            // --- TAMBAHAN ATTRIBUTE HTML5 ---
                                             min={0}
                                             max={item.skala_maks}
-                                            step="0.01" // Support desimal
-                                            // --------------------------------
+                                            step="0.01"
                                         />
-                                        <span className="text-xs text-gray-500 whitespace-nowrap font-mono bg-gray-100 px-2 py-1 rounded">
-                                            Max: {item.skala_maks}
-                                        </span>
+                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                            <span className="text-gray-400 text-xs">/ {item.skala_maks}</span>
+                                        </div>
                                     </div>
                                 </div>
                             ))
                         )}
                     </div>
 
-                    <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                    {/* Footer Modal */}
+                    <div className="flex-none px-6 py-4 border-t bg-gray-50 rounded-b-lg flex justify-end gap-3">
                         <SecondaryButton type="button" onClick={() => setShowStaticModal(false)}>
                             Tutup
                         </SecondaryButton>
                         {staticItems.length > 0 && (
-                            <PrimaryButton disabled={processing}>
+                            <PrimaryButton disabled={processing} className="bg-indigo-600 hover:bg-indigo-700 shadow-sm">
                                 {processing ? 'Menyimpan...' : 'Simpan Perubahan'}
                             </PrimaryButton>
                         )}

@@ -1,4 +1,4 @@
-import React, {useEffect, useState, FormEvent} from 'react';
+import React, { useEffect, useState, FormEvent } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import Modal from '@/components/Modal';
 import InputLabel from '@/components/InputLabel';
@@ -7,9 +7,24 @@ import PrimaryButton from '@/components/PrimaryButton';
 import SecondaryButton from '@/components/SecondaryButton';
 import DangerButton from '@/components/DangerButton';
 import apiClient from '@/lib/axios';
-import {useOutletContext} from "react-router-dom";
-import type {LayoutContextType} from "../../../interface/layout.ts";
 import Header from "../../../components/Header.tsx";
+import Swal from 'sweetalert2';
+import withReactContent from 'sweetalert2-react-content';
+
+const MySwal = withReactContent(Swal);
+
+// --- KONFIGURASI SWEETALERT ---
+const Toast = Swal.mixin({
+    toast: true,
+    position: 'top-end',
+    showConfirmButton: false,
+    timer: 3000,
+    timerProgressBar: true,
+    didOpen: (toast) => {
+        toast.onmouseenter = Swal.stopTimer;
+        toast.onmouseleave = Swal.resumeTimer;
+    }
+});
 
 // Interface Data
 interface Alumni {
@@ -27,13 +42,11 @@ interface Meta {
     from: number;
 }
 
-// KOMPONEN PAGINATION SEDERHANA (MIMIC LARAVEL STYLE)
-const SimplePagination = ({meta, onPageChange}: { meta: Meta, onPageChange: (page: number) => void }) => {
+// KOMPONEN PAGINATION
+const SimplePagination = ({ meta, onPageChange }: { meta: Meta, onPageChange: (page: number) => void }) => {
     if (meta.last_page <= 1) return null;
-
     return (
         <div className="flex flex-wrap justify-center gap-1 mt-6">
-            {/* Prev Button */}
             <button
                 disabled={meta.current_page === 1}
                 onClick={() => onPageChange(meta.current_page - 1)}
@@ -41,21 +54,16 @@ const SimplePagination = ({meta, onPageChange}: { meta: Meta, onPageChange: (pag
             >
                 &laquo; Previous
             </button>
-
-            {/* Page Numbers */}
-            {Array.from({length: meta.last_page}, (_, i) => i + 1).map((page) => (
+            {Array.from({ length: meta.last_page }, (_, i) => i + 1).map((page) => (
                 <button
                     key={page}
                     onClick={() => onPageChange(page)}
-                    className={`px-4 py-2 text-sm border rounded ${
-                        page === meta.current_page ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
-                    }`}
+                    className={`px-4 py-2 text-sm border rounded ${page === meta.current_page ? 'bg-indigo-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'
+                        }`}
                 >
                     {page}
                 </button>
             ))}
-
-            {/* Next Button */}
             <button
                 disabled={meta.current_page === meta.last_page}
                 onClick={() => onPageChange(meta.current_page + 1)}
@@ -81,6 +89,7 @@ export default function AlumniIndex() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [processing, setProcessing] = useState(false);
+    const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
     // State Modal Import
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -89,28 +98,27 @@ export default function AlumniIndex() {
     const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 
     // Form Data
-    const [form, setForm] = useState({id: 0, name: '', status: '', batch: '', major: ''});
+    const [form, setForm] = useState({ id: 0, name: '', status: '', batch: '', major: '' });
 
     // --- FETCH DATA ---
     const fetchData = async (page = 1, search = searchTerm) => {
         setLoading(true);
         try {
             const response = await apiClient.get('/alumni', {
-                params: {page, search}
+                params: { page, search }
             });
             setData(response.data.data);
             setMeta(response.data.meta);
-            // Reset selection saat pindah halaman/search
             setSelectedIds([]);
         } catch (error) {
             console.error("Error fetching alumni:", error);
+            Toast.fire({ icon: 'error', title: 'Gagal memuat data.' });
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        // Debounce search
         const delayDebounceFn = setTimeout(() => {
             fetchData(1, searchTerm);
         }, 500);
@@ -136,71 +144,114 @@ export default function AlumniIndex() {
     };
 
     const executeBulkDelete = async () => {
-        if (!confirm(`Yakin ingin menghapus ${selectedIds.length} data terpilih?`)) return;
-
-        try {
-            await apiClient.post('/alumni/bulk-destroy', {ids: selectedIds});
-            fetchData(meta?.current_page);
-            setSelectedIds([]);
-        } catch (error) {
-            alert('Gagal menghapus data.');
-        }
+        MySwal.fire({
+            title: `Hapus ${selectedIds.length} data?`,
+            text: "Data yang dihapus tidak dapat dikembalikan.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Ya, Hapus Semua!'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    await apiClient.post('/alumni/bulk-destroy', { ids: selectedIds });
+                    fetchData(meta?.current_page);
+                    setSelectedIds([]);
+                    Toast.fire({ icon: 'success', title: 'Data berhasil dihapus.' });
+                } catch (error) {
+                    MySwal.fire('Gagal!', 'Terjadi kesalahan saat menghapus data.', 'error');
+                }
+            }
+        });
     };
 
     // --- HANDLERS CRUD ---
     const openModal = (item: Alumni | null = null) => {
+        setErrors({}); // Reset error
         if (item) {
             setIsEditMode(true);
-            setForm({id: item.id, name: item.name, status: item.status, batch: item.batch, major: item.major});
+            setForm({ id: item.id, name: item.name, status: item.status, batch: item.batch, major: item.major });
         } else {
             setIsEditMode(false);
-            setForm({id: 0, name: '', status: '', batch: '', major: ''});
+            setForm({ id: 0, name: '', status: '', batch: '', major: '' });
         }
         setIsModalOpen(true);
     };
 
+    const validateForm = () => {
+        let newErrors: { [key: string]: string } = {};
+        let isValid = true;
+
+        if (!form.name.trim()) { newErrors.name = 'Nama wajib diisi.'; isValid = false; }
+        if (!String(form.batch).trim()) { newErrors.batch = 'Angkatan wajib diisi.'; isValid = false; }
+        if (!form.major.trim()) { newErrors.major = 'Jurusan wajib diisi.'; isValid = false; }
+        if (!form.status.trim()) { newErrors.status = 'Status wajib diisi.'; isValid = false; }
+
+        setErrors(newErrors);
+        return isValid;
+    };
+
     const handleSubmit = async (e: FormEvent) => {
         e.preventDefault();
+
+        if (!validateForm()) return;
+
         setProcessing(true);
         try {
             if (isEditMode) {
                 await apiClient.put(`/alumni/${form.id}`, form);
+                Toast.fire({ icon: 'success', title: 'Data alumni diperbarui!' });
             } else {
                 await apiClient.post('/alumni', form);
+                Toast.fire({ icon: 'success', title: 'Data alumni ditambahkan!' });
             }
             setIsModalOpen(false);
             fetchData(meta?.current_page);
         } catch (error) {
-            alert('Gagal menyimpan data.');
+            MySwal.fire({ icon: 'error', title: 'Gagal', text: 'Terjadi kesalahan saat menyimpan data.' });
         } finally {
             setProcessing(false);
         }
     };
 
     const handleDelete = async (id: number) => {
-        if (!confirm("Apakah Anda yakin ingin menghapus data alumni ini?")) return;
-        try {
-            await apiClient.delete(`/alumni/${id}`);
-            fetchData(meta?.current_page);
-        } catch (error) {
-            alert("Gagal menghapus data.");
-        }
+        MySwal.fire({
+            title: 'Hapus data alumni?',
+            text: "Data ini akan dihapus permanen.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Ya, Hapus!'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    await apiClient.delete(`/alumni/${id}`);
+                    fetchData(meta?.current_page);
+                    Toast.fire({ icon: 'success', title: 'Data berhasil dihapus.' });
+                } catch (error) {
+                    MySwal.fire('Gagal!', 'Gagal menghapus data.', 'error');
+                }
+            }
+        });
     };
 
     // --- HANDLERS IMPORT ---
     const handlePreview = async () => {
-        if (!importFile) return alert("Pilih file dulu");
+        if (!importFile) return MySwal.fire({ icon: 'warning', title: 'Pilih file terlebih dahulu' });
         setIsLoadingPreview(true);
         const formData = new FormData();
         formData.append('file', importFile);
 
         try {
             const res = await apiClient.post('/alumni/preview', formData, {
-                headers: {'Content-Type': 'multipart/form-data'}
+                headers: { 'Content-Type': 'multipart/form-data' }
             });
             setPreviewData(res.data);
+            Toast.fire({ icon: 'success', title: 'Preview berhasil dimuat.' });
         } catch (e) {
-            alert("Gagal preview file Excel.");
+            MySwal.fire({ icon: 'error', title: 'Gagal', text: 'Gagal membaca file Excel. Pastikan format sesuai.' });
         } finally {
             setIsLoadingPreview(false);
         }
@@ -215,14 +266,15 @@ export default function AlumniIndex() {
 
         try {
             await apiClient.post('/alumni/import', formData, {
-                headers: {'Content-Type': 'multipart/form-data'}
+                headers: { 'Content-Type': 'multipart/form-data' }
             });
             setIsImportModalOpen(false);
             setImportFile(null);
             setPreviewData([]);
-            fetchData(); // Refresh data
+            fetchData();
+            MySwal.fire({ icon: 'success', title: 'Berhasil', text: 'Data alumni berhasil diimport!' });
         } catch (error) {
-            alert('Gagal import data.');
+            MySwal.fire({ icon: 'error', title: 'Gagal Import', text: 'Terjadi kesalahan saat mengimport data.' });
         } finally {
             setProcessing(false);
         }
@@ -235,15 +287,12 @@ export default function AlumniIndex() {
             </Header>
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
+                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border border-gray-200">
 
                         {/* HEADER & ACTIONS */}
                         <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-                            <div
-                                className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full md:w-auto">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full md:w-auto">
                                 <div className="text-gray-900 font-bold text-lg whitespace-nowrap">Daftar Alumni</div>
-
-                                {/* Search */}
                                 <TextInput
                                     type="text"
                                     placeholder="Cari nama, jurusan..."
@@ -251,8 +300,6 @@ export default function AlumniIndex() {
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     className="w-full sm:w-64 text-sm"
                                 />
-
-                                {/* Bulk Delete Button */}
                                 {selectedIds.length > 0 && (
                                     <DangerButton onClick={executeBulkDelete} className="text-xs whitespace-nowrap">
                                         Hapus ({selectedIds.length}) Data
@@ -261,8 +308,7 @@ export default function AlumniIndex() {
                             </div>
 
                             <div className="flex gap-2 w-full md:w-auto justify-end">
-                                <SecondaryButton onClick={() => setIsImportModalOpen(true)}>Import
-                                    Excel</SecondaryButton>
+                                <SecondaryButton onClick={() => setIsImportModalOpen(true)}>Import Excel</SecondaryButton>
                                 <PrimaryButton onClick={() => openModal(null)}>+ Tambah</PrimaryButton>
                             </div>
                         </div>
@@ -271,188 +317,218 @@ export default function AlumniIndex() {
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left">
-                                        <input
-                                            type="checkbox"
-                                            className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                            onChange={handleSelectAll}
-                                            checked={data.length > 0 && selectedIds.length === data.length}
-                                        />
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Angkatan</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jurusan</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
-                                </tr>
+                                    <tr>
+                                        <th className="px-6 py-3 text-left w-10">
+                                            <input
+                                                type="checkbox"
+                                                className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                                onChange={handleSelectAll}
+                                                checked={data.length > 0 && selectedIds.length === data.length}
+                                            />
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">No</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Nama</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Angkatan</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Jurusan</th>
+                                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Aksi</th>
+                                    </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
-                                {loading ? (
-                                    <tr>
-                                        <td colSpan={7} className="text-center py-4">Memuat data...</td>
-                                    </tr>
-                                ) : data.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={7} className="text-center py-4 text-gray-500">Belum ada data
-                                            alumni.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    data.map((alumni, index) => (
-                                        <tr key={alumni.id}
-                                            className={selectedIds.includes(alumni.id) ? "bg-indigo-50" : ""}>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <input
-                                                    type="checkbox"
-                                                    className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
-                                                    checked={selectedIds.includes(alumni.id)}
-                                                    onChange={() => handleSelectOne(alumni.id)}
-                                                />
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {meta ? (meta.current_page - 1) * 10 + index + 1 : index + 1}
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{alumni.name}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{alumni.batch}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{alumni.major}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{alumni.status}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                                <button onClick={() => openModal(alumni)}
-                                                        className="text-indigo-600 hover:text-indigo-900 mr-2">Edit
-                                                </button>
-                                                <button onClick={() => handleDelete(alumni.id)}
-                                                        className="text-red-600 hover:text-red-900">Hapus
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
+                                    {loading ? (
+                                        <tr><td colSpan={7} className="text-center py-8 text-gray-500">Memuat data...</td></tr>
+                                    ) : data.length === 0 ? (
+                                        <tr><td colSpan={7} className="text-center py-8 text-gray-500">Belum ada data alumni.</td></tr>
+                                    ) : (
+                                        data.map((alumni, index) => (
+                                            <tr key={alumni.id} className={`hover:bg-gray-50 transition-colors ${selectedIds.includes(alumni.id) ? "bg-indigo-50" : ""}`}>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                                        checked={selectedIds.includes(alumni.id)}
+                                                        onChange={() => handleSelectOne(alumni.id)}
+                                                    />
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                    {meta ? (meta.current_page - 1) * 10 + index + 1 : index + 1}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">{alumni.name}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{alumni.batch}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{alumni.major}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                    <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs font-bold uppercase border border-gray-300">
+                                                        {alumni.status}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                    <button onClick={() => openModal(alumni)} className="text-indigo-600 hover:text-indigo-900 font-bold mr-4">Edit</button>
+                                                    <button onClick={() => handleDelete(alumni.id)} className="text-red-600 hover:text-red-900">Hapus</button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
                                 </tbody>
                             </table>
                         </div>
 
                         {/* PAGINATION */}
-                        {meta && <SimplePagination meta={meta} onPageChange={(page) => fetchData(page)}/>}
+                        {meta && <SimplePagination meta={meta} onPageChange={(page) => fetchData(page)} />}
                     </div>
                 </div>
             </div>
 
-            {/* MODAL FORM CRUD */}
+            {/* MODAL FORM CRUD (Sticky) */}
             <Modal show={isModalOpen} onClose={() => setIsModalOpen(false)}>
-                <form onSubmit={handleSubmit} className="p-6">
-                    <h2 className="text-lg font-medium text-gray-900 mb-4">{isEditMode ? "Edit Data" : "Tambah Data"}</h2>
+                <form onSubmit={handleSubmit} className="flex flex-col max-h-[85vh]">
 
-                    <div className="mb-4">
-                        <InputLabel value="Nama Lengkap"/>
-                        <TextInput className="mt-1 block w-full" value={form.name}
-                                   onChange={(e) => setForm({...form, name: e.target.value})} required/>
+                    {/* HEADER */}
+                    <div className="flex-none flex items-center justify-between px-6 py-4 border-b bg-white">
+                        <h2 className="text-lg font-bold text-gray-900">
+                            {isEditMode ? "Edit Data Alumni" : "Tambah Alumni Baru"}
+                        </h2>
+                        <button type="button" onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <InputLabel value="Angkatan"/>
-                            <TextInput type="number" className="mt-1 block w-full" value={form.batch}
-                                       onChange={(e) => setForm({...form, batch: e.target.value})} required/>
+                    {/* CONTENT */}
+                    <div className="flex-1 overflow-y-auto p-6">
+                        <div className="space-y-4">
+                            <div>
+                                <InputLabel value="Nama Lengkap" required />
+                                <TextInput
+                                    className={`mt-1 block w-full ${errors.name ? 'border-red-500' : ''}`}
+                                    value={form.name}
+                                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                    placeholder="Nama Lengkap"
+                                />
+                                {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <InputLabel value="Angkatan" required />
+                                    <TextInput
+                                        type="number"
+                                        className={`mt-1 block w-full ${errors.batch ? 'border-red-500' : ''}`}
+                                        value={form.batch}
+                                        onChange={(e) => setForm({ ...form, batch: e.target.value })}
+                                        placeholder="2023"
+                                    />
+                                    {errors.batch && <p className="text-red-500 text-xs mt-1">{errors.batch}</p>}
+                                </div>
+                                <div>
+                                    <InputLabel value="Jurusan" required />
+                                    <TextInput
+                                        className={`mt-1 block w-full ${errors.major ? 'border-red-500' : ''}`}
+                                        value={form.major}
+                                        onChange={(e) => setForm({ ...form, major: e.target.value })}
+                                        placeholder="TKJ"
+                                    />
+                                    {errors.major && <p className="text-red-500 text-xs mt-1">{errors.major}</p>}
+                                </div>
+                            </div>
+
+                            <div>
+                                <InputLabel value="Status Saat Ini" required />
+                                <TextInput
+                                    className={`mt-1 block w-full ${errors.status ? 'border-red-500' : ''}`}
+                                    value={form.status}
+                                    onChange={(e) => setForm({ ...form, status: e.target.value })}
+                                    placeholder="Contoh: Kuliah di UNSRAT / Bekerja di PT. Maju / Wirausaha"
+                                />
+                                {errors.status && <p className="text-red-500 text-xs mt-1">{errors.status}</p>}
+                            </div>
                         </div>
-                        <div>
-                            <InputLabel value="Jurusan"/>
-                            <TextInput className="mt-1 block w-full" value={form.major}
-                                       onChange={(e) => setForm({...form, major: e.target.value})} required/>
-                        </div>
                     </div>
 
-                    <div className="mb-6">
-                        <InputLabel value="Status"/>
-                        <TextInput className="mt-1 block w-full" value={form.status}
-                                   onChange={(e) => setForm({...form, status: e.target.value})}
-                                   placeholder="Kuliah / Kerja / Wirausaha" required/>
-                    </div>
-
-                    <div className="flex justify-end gap-2">
+                    {/* FOOTER */}
+                    <div className="flex-none flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-lg">
                         <SecondaryButton type="button" onClick={() => setIsModalOpen(false)}>Batal</SecondaryButton>
-                        <PrimaryButton disabled={processing}>{processing ? 'Menyimpan...' : 'Simpan'}</PrimaryButton>
+                        <PrimaryButton disabled={processing}>{processing ? 'Menyimpan...' : 'Simpan Data'}</PrimaryButton>
                     </div>
                 </form>
             </Modal>
 
-            {/* MODAL IMPORT EXCEL */}
+            {/* MODAL IMPORT EXCEL (Sticky) */}
             <Modal show={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} maxWidth="2xl">
-                <form onSubmit={handleImportSubmit} className="p-6">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-lg font-medium text-gray-900">Import Data Alumni</h2>
+                <form onSubmit={handleImportSubmit} className="flex flex-col max-h-[85vh]">
+
+                    {/* HEADER */}
+                    <div className="flex-none flex items-center justify-between px-6 py-4 border-b bg-white">
+                        <h2 className="text-lg font-bold text-gray-900">Import Data Alumni</h2>
+                        <button type="button" onClick={() => setIsImportModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
                     </div>
 
-                    <div
-                        className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-md text-sm text-blue-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                        <span>Gunakan format Excel yang sesuai.</span>
-                        {/* URL download template langsung ke endpoint flask */}
-                        <a href="/api/alumni/template"
-                           className="flex items-center gap-1 font-bold hover:underline text-blue-700 whitespace-nowrap">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                            </svg>
-                            Download Template
-                        </a>
-                    </div>
-
-                    <div className="mb-4 flex gap-2 items-end">
-                        <div className="w-full">
-                            <InputLabel value="Pilih File Excel"/>
-                            <input
-                                type="file"
-                                className="mt-1 block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none p-2"
-                                onChange={(e) => {
-                                    setImportFile(e.target.files ? e.target.files[0] : null);
-                                    setPreviewData([]); // Reset preview jika ganti file
-                                }}
-                                accept=".xlsx, .xls, .csv"
-                            />
+                    {/* CONTENT */}
+                    <div className="flex-1 overflow-y-auto p-6">
+                        <div className="mb-4 p-3 bg-blue-50 border border-blue-100 rounded-md text-sm text-blue-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                            <span>Gunakan format Excel yang sesuai.</span>
+                            <a href="/api/alumni/template" className="flex items-center gap-1 font-bold hover:underline text-blue-700 whitespace-nowrap">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                </svg>
+                                Download Template
+                            </a>
                         </div>
-                        <SecondaryButton type="button" onClick={handlePreview}
-                                         disabled={isLoadingPreview || !importFile} className="mb-0.5 h-10">
-                            {isLoadingPreview ? "Loading..." : "Lihat Preview"}
-                        </SecondaryButton>
+
+                        <div className="mb-4 flex gap-2 items-end">
+                            <div className="w-full">
+                                <InputLabel value="Pilih File Excel" />
+                                <input
+                                    type="file"
+                                    className="mt-1 block w-full text-sm text-gray-900 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none p-2"
+                                    onChange={(e) => {
+                                        setImportFile(e.target.files ? e.target.files[0] : null);
+                                        setPreviewData([]);
+                                    }}
+                                    accept=".xlsx, .xls, .csv"
+                                />
+                            </div>
+                            <SecondaryButton type="button" onClick={handlePreview} disabled={isLoadingPreview || !importFile} className="mb-0.5 h-10">
+                                {isLoadingPreview ? "Loading..." : "Preview"}
+                            </SecondaryButton>
+                        </div>
+
+                        {/* PREVIEW TABLE */}
+                        {previewData.length > 0 && (
+                            <div className="border rounded-lg overflow-hidden">
+                                <div className="bg-gray-100 px-4 py-2 border-b font-bold text-sm text-gray-700">
+                                    Preview Data ({previewData.length} Baris)
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Angkatan</th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Jurusan</th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {previewData.map((row, idx) => (
+                                                <tr key={idx}>
+                                                    <td className="px-4 py-2 text-sm text-gray-900">{row.nama}</td>
+                                                    <td className="px-4 py-2 text-sm text-gray-900">{row.angkatan}</td>
+                                                    <td className="px-4 py-2 text-sm text-gray-900">{row.jurusan}</td>
+                                                    <td className="px-4 py-2 text-sm text-gray-900">{row.status}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
-                    {/* PREVIEW TABLE */}
-                    {previewData.length > 0 && (
-                        <div className="mb-6 border rounded-lg overflow-hidden">
-                            <div className="bg-gray-100 px-4 py-2 border-b font-bold text-sm text-gray-700">
-                                Preview Data ({previewData.length} Baris)
-                            </div>
-                            <div className="max-h-60 overflow-y-auto">
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50 sticky top-0">
-                                    <tr>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Nama</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Angkatan</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Jurusan</th>
-                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                    {previewData.map((row, idx) => (
-                                        <tr key={idx}>
-                                            <td className="px-4 py-2 text-sm text-gray-900">{row.nama}</td>
-                                            <td className="px-4 py-2 text-sm text-gray-900">{row.angkatan}</td>
-                                            <td className="px-4 py-2 text-sm text-gray-900">{row.jurusan}</td>
-                                            <td className="px-4 py-2 text-sm text-gray-900">{row.status}</td>
-                                        </tr>
-                                    ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="flex justify-end gap-2">
-                        <SecondaryButton type="button"
-                                         onClick={() => setIsImportModalOpen(false)}>Batal</SecondaryButton>
-                        <PrimaryButton disabled={processing || previewData.length === 0}
-                                       className={previewData.length === 0 ? "opacity-50 cursor-not-allowed" : ""}>
+                    {/* FOOTER */}
+                    <div className="flex-none flex justify-end gap-3 px-6 py-4 border-t bg-gray-50 rounded-b-lg">
+                        <SecondaryButton type="button" onClick={() => setIsImportModalOpen(false)}>Batal</SecondaryButton>
+                        <PrimaryButton disabled={processing || (previewData.length === 0 && isImportModalOpen && !importFile)} className={previewData.length === 0 ? "opacity-75" : ""}>
                             {processing ? "Mengupload..." : "Import Sekarang"}
                         </PrimaryButton>
                     </div>

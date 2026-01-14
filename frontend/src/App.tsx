@@ -5,10 +5,10 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 
 // Admin Pages
-import KriteriaIndex from "./pages/admin/kriteria/index";
+import KriteriaIndex from "./pages/admin/kriteria";
 import PeriodeIndex from "./pages/admin/periode";
-import JurusanIndex from "./pages/admin/jurusan/index";
-import AlumniIndex from "./pages/admin/alumni/index";
+import JurusanIndex from "./pages/admin/jurusan";
+import AlumniIndex from "./pages/admin/alumni";
 import MonitoringIndex from "./pages/admin/monitoring";
 import Settings from "./pages/admin/Settings";
 import AdminSiswaIndex from "./pages/admin/siswa";
